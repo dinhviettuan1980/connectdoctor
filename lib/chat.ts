@@ -85,7 +85,7 @@ export function subscribeToThreads(
         .sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
       callback(threads);
     },
-    () => callback([]),
+    (err) => { console.error("[subscribeToThreads]", err); callback([]); },
   );
 }
 
