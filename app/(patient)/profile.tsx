@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, Pressable,
+  View, Text, ScrollView, Pressable, TextInput,
   Modal, Image, ActivityIndicator, Alert, useWindowDimensions,
+  KeyboardAvoidingView, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -16,12 +17,23 @@ import { MetricChart } from "@/components/MetricChart";
 import { useAuthStore } from "@/hooks/useAuth";
 import { signOut } from "@/lib/auth";
 import {
-  uploadPrescriptionImage,
-  subscribeToPrescriptions,
+  createPrescription,
+  updatePrescriptionNote,
+  addImageToPrescription,
+  removeImageFromPrescription,
   deletePrescription,
-  type PrescriptionPhoto,
+  subscribeToPrescriptions,
+  type Prescription,
+  type PrescriptionImage,
 } from "@/lib/prescriptions";
 import { useRouter } from "expo-router";
+
+function formatDateTime(ts: number): string {
+  return new Date(ts).toLocaleString("vi-VN", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
 
 const TABS = [
   { key: "info", label: "Thông tin" },
@@ -103,164 +115,285 @@ function InfoTab() {
 }
 
 // ---------------------------------------------------------------------------
-// Meds tab — prescription photo gallery
+// Meds tab — prescription list with CRUD
 // ---------------------------------------------------------------------------
 
 function MedsTab() {
   const user = useAuthStore((s) => s.user);
   const { width } = useWindowDimensions();
-  const [photos, setPhotos] = useState<PrescriptionPhoto[]>([]);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [selected, setSelected] = useState<PrescriptionPhoto | null>(null);
+  const [viewImage, setViewImage] = useState<string | null>(null);
 
-  // 3 columns: padding 16*2 + gap 8*2 = 48
+  // 3 columns inside detail modal (modal width ≈ screen width, same padding)
   const thumbSize = (width - 48) / 3;
+
+  // Derive selected from live list so it auto-updates after photo add/remove
+  const selected = prescriptions.find((p) => p.id === selectedId) ?? null;
 
   useEffect(() => {
     if (!user?.uid) return;
-    return subscribeToPrescriptions(user.uid, setPhotos);
+    return subscribeToPrescriptions(user.uid, setPrescriptions);
   }, [user?.uid]);
 
-  const pickImage = async (fromCamera: boolean) => {
-    let result: ImagePicker.ImagePickerResult;
-    if (fromCamera) {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền camera để chụp ảnh."); return; }
-      result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-    } else {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền thư viện ảnh để chọn file."); return; }
-      result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.85,
-      });
-    }
-    if (result.canceled || !result.assets?.[0]) return;
-    if (!user?.uid) return;
-
-    setUploading(true);
+  // ── Create ──────────────────────────────────────────────────────────────
+  const handleCreate = async () => {
+    if (!user?.uid || creating) return;
+    setCreating(true);
     try {
-      await uploadPrescriptionImage(user.uid, result.assets[0].uri);
+      const id = await createPrescription(user.uid);
+      setSelectedId(id); // open detail immediately
     } catch {
-      Alert.alert("Lỗi upload", "Không thể lưu ảnh. Kiểm tra kết nối và thử lại.");
+      Alert.alert("Lỗi", "Không thể tạo đơn thuốc.");
     } finally {
-      setUploading(false);
+      setCreating(false);
     }
   };
 
-  const confirmDelete = (photo: PrescriptionPhoto) => {
-    Alert.alert("Xoá đơn thuốc", "Bạn có chắc muốn xoá ảnh này không?", [
+  // ── Delete prescription ──────────────────────────────────────────────────
+  const handleDeletePrescription = (p: Prescription) => {
+    Alert.alert("Xoá đơn thuốc", `Xoá đơn ngày ${formatDateTime(p.createdAt)}?`, [
       { text: "Huỷ", style: "cancel" },
       {
         text: "Xoá", style: "destructive",
         onPress: async () => {
-          setSelected(null);
-          await deletePrescription(photo.id, photo.storageKey);
+          if (selectedId === p.id) setSelectedId(null);
+          await deletePrescription(p);
         },
       },
     ]);
   };
 
+  // ── Add image inside detail modal ────────────────────────────────────────
+  const handleAddImage = async (fromCamera: boolean) => {
+    if (!user?.uid || !selectedId) return;
+    let result: ImagePicker.ImagePickerResult;
+    if (fromCamera) {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền camera."); return; }
+      result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+    } else {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền thư viện ảnh."); return; }
+      result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
+    }
+    if (result.canceled || !result.assets?.[0]) return;
+    setUploading(true);
+    try {
+      await addImageToPrescription(selectedId, user.uid, result.assets[0].uri);
+    } catch {
+      Alert.alert("Lỗi", "Upload ảnh thất bại.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      {/* Upload buttons */}
-      <View className="flex-row gap-2">
-        <Button block onPress={() => pickImage(false)} disabled={uploading}>
-          📁 Chọn file
-        </Button>
-        <Button variant="primary" block onPress={() => pickImage(true)} disabled={uploading}>
-          📷 Chụp ảnh
-        </Button>
-      </View>
+      {/* Create button */}
+      <Button variant="primary" block onPress={handleCreate} loading={creating}>
+        + Tạo đơn thuốc mới
+      </Button>
 
-      {/* Upload progress */}
-      {uploading && (
-        <View className="flex-row items-center justify-center gap-2 py-2">
-          <ActivityIndicator size="small" />
-          <Text className="text-xs text-ink-3">Đang upload…</Text>
-        </View>
-      )}
-
-      {/* Thumbnail grid */}
-      {photos.length === 0 && !uploading ? (
+      {/* Empty state */}
+      {prescriptions.length === 0 && (
         <View className="items-center py-16 gap-1">
           <Text className="text-sm text-ink-3">Chưa có đơn thuốc nào</Text>
-          <Text className="text-[11px] text-ink-4">Chụp hoặc chọn ảnh đơn thuốc để lưu</Text>
-        </View>
-      ) : (
-        <View className="flex-row flex-wrap gap-2">
-          {photos.map((photo) => (
-            <View key={photo.id} style={{ width: thumbSize }}>
-              <Pressable onPress={() => setSelected(photo)}>
-                <Image
-                  source={{ uri: photo.imageUrl }}
-                  style={{ width: thumbSize, height: thumbSize * 1.35, borderRadius: 8, backgroundColor: "#f1f0ea" }}
-                  resizeMode="cover"
-                />
-              </Pressable>
-              {/* Delete button — top-right corner */}
-              <Pressable
-                onPress={() => deletePrescription(photo.id, photo.storageKey)}
-                style={{
-                  position: "absolute", top: 4, right: 4,
-                  width: 20, height: 20, borderRadius: 10,
-                  backgroundColor: "rgba(0,0,0,0.55)",
-                  alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <Text style={{ color: "#fff", fontSize: 11, lineHeight: 12 }}>✕</Text>
-              </Pressable>
-              <Text className="font-mono text-[10px] text-ink-3 mt-0.5">
-                {new Date(photo.createdAt).toLocaleDateString("vi-VN")}
-              </Text>
-            </View>
-          ))}
+          <Text className="text-[11px] text-ink-4">Bấm "Tạo đơn thuốc mới" để bắt đầu</Text>
         </View>
       )}
 
-      {/* Fullscreen modal */}
-      <Modal
-        visible={!!selected}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelected(null)}
-      >
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.93)" }}>
-          {/* Top bar */}
-          <View
-            style={{
-              position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
-              flexDirection: "row", justifyContent: "space-between",
-              alignItems: "center", paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12,
-            }}
-          >
-            <Pressable
-              onPress={() => selected && confirmDelete(selected)}
-              style={{ padding: 8 }}
-            >
-              <Text style={{ color: "#ff6b6b", fontSize: 13 }}>Xoá</Text>
-            </Pressable>
-            <Pressable onPress={() => setSelected(null)} style={{ padding: 8 }}>
-              <Text style={{ color: "#fff", fontSize: 22, lineHeight: 24 }}>✕</Text>
-            </Pressable>
+      {/* Prescription list */}
+      {prescriptions.map((p) => (
+        <Card key={p.id} padding="md">
+          {/* Header row */}
+          <View className="flex-row items-center justify-between mb-2">
+            <Text className="font-mono text-xs font-bold text-ink">
+              {formatDateTime(p.createdAt)}
+            </Text>
+            <View className="flex-row gap-3">
+              <Pressable onPress={() => setSelectedId(p.id)}>
+                <Text className="text-xs text-accent-ink">Mở</Text>
+              </Pressable>
+              <Pressable onPress={() => handleDeletePrescription(p)}>
+                <Text className="text-xs text-danger">Xoá</Text>
+              </Pressable>
+            </View>
           </View>
 
-          {/* Full image */}
-          {selected && (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 100 }}>
-              <Image
-                source={{ uri: selected.imageUrl }}
-                style={{ width: "95%", height: "78%" }}
-                resizeMode="contain"
-              />
-              <Text style={{ color: "#888", fontSize: 11, marginTop: 10, fontFamily: "monospace" }}>
-                {new Date(selected.createdAt).toLocaleString("vi-VN")}
-              </Text>
+          {/* Note preview */}
+          {!!p.note && (
+            <Text className="text-[11px] text-ink-3 mb-2" numberOfLines={1}>{p.note}</Text>
+          )}
+
+          {/* Photo thumbnails preview (max 4) */}
+          {p.images.length > 0 ? (
+            <View className="flex-row gap-1.5">
+              {p.images.slice(0, 4).map((img, i) => (
+                <View key={img.storageKey} style={{ position: "relative" }}>
+                  <Image
+                    source={{ uri: img.url }}
+                    style={{ width: 52, height: 68, borderRadius: 6, backgroundColor: "#f1f0ea" }}
+                    resizeMode="cover"
+                  />
+                  {i === 3 && p.images.length > 4 && (
+                    <View style={{
+                      position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 6,
+                      backgroundColor: "rgba(0,0,0,0.45)",
+                      alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Text style={{ color: "#fff", fontSize: 11, fontWeight: "bold" }}>
+                        +{p.images.length - 4}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ))}
             </View>
+          ) : (
+            <Text className="text-[11px] text-ink-4">Chưa có ảnh</Text>
+          )}
+        </Card>
+      ))}
+
+      {/* ── Detail modal ─────────────────────────────────────────────────── */}
+      <Modal
+        visible={!!selected}
+        animationType="slide"
+        onRequestClose={() => setSelectedId(null)}
+      >
+        <SafeAreaView className="flex-1 bg-paper">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ flex: 1 }}
+          >
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+              {/* Top bar */}
+              <View className="flex-row items-center justify-between">
+                <Text className="font-mono text-xs font-bold text-ink">
+                  {selected ? formatDateTime(selected.createdAt) : ""}
+                </Text>
+                <Pressable onPress={() => setSelectedId(null)} className="p-1">
+                  <Text className="text-base text-ink-2">✕ Đóng</Text>
+                </Pressable>
+              </View>
+
+              {/* Note editor */}
+              <NoteEditor
+                key={selected?.id}
+                initialNote={selected?.note ?? ""}
+                onSave={(note) => selected && updatePrescriptionNote(selected.id, note)}
+              />
+
+              {/* Photos section */}
+              <Text className="text-[10px] uppercase tracking-wider text-ink-3 mt-1">
+                Ảnh đơn thuốc ({selected?.images.length ?? 0})
+              </Text>
+
+              {uploading && (
+                <View className="flex-row items-center gap-2">
+                  <ActivityIndicator size="small" />
+                  <Text className="text-xs text-ink-3">Đang upload…</Text>
+                </View>
+              )}
+
+              {/* Photo grid */}
+              <View className="flex-row flex-wrap gap-2">
+                {selected?.images.map((img) => (
+                  <View key={img.storageKey} style={{ width: thumbSize }}>
+                    <Pressable onPress={() => setViewImage(img.url)}>
+                      <Image
+                        source={{ uri: img.url }}
+                        style={{ width: thumbSize, height: thumbSize * 1.35, borderRadius: 8, backgroundColor: "#f1f0ea" }}
+                        resizeMode="cover"
+                      />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => selected && removeImageFromPrescription(selected.id, img)}
+                      style={{
+                        position: "absolute", top: 4, right: 4,
+                        width: 20, height: 20, borderRadius: 10,
+                        backgroundColor: "rgba(0,0,0,0.55)",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 11, lineHeight: 12 }}>✕</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+
+              {/* Add photo buttons */}
+              <View className="flex-row gap-2">
+                <Button block onPress={() => handleAddImage(false)} disabled={uploading}>
+                  📁 Chọn file
+                </Button>
+                <Button variant="primary" block onPress={() => handleAddImage(true)} disabled={uploading}>
+                  📷 Chụp ảnh
+                </Button>
+              </View>
+
+              {/* Delete prescription */}
+              {selected && (
+                <Button
+                  variant="danger"
+                  block
+                  onPress={() => { handleDeletePrescription(selected); }}
+                >
+                  Xoá đơn thuốc này
+                </Button>
+              )}
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* ── Fullscreen image viewer ───────────────────────────────────────── */}
+      <Modal visible={!!viewImage} transparent animationType="fade" onRequestClose={() => setViewImage(null)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.93)", alignItems: "center", justifyContent: "center" }}>
+          <Pressable
+            onPress={() => setViewImage(null)}
+            style={{ position: "absolute", top: 52, right: 20, padding: 8 }}
+          >
+            <Text style={{ color: "#fff", fontSize: 22 }}>✕</Text>
+          </Pressable>
+          {viewImage && (
+            <Image source={{ uri: viewImage }} style={{ width: "95%", height: "80%" }} resizeMode="contain" />
           )}
         </View>
       </Modal>
     </ScrollView>
+  );
+}
+
+// Controlled note editor — local state, saves on blur or button press
+function NoteEditor({ initialNote, onSave }: { initialNote: string; onSave: (v: string) => void }) {
+  const [note, setNote] = useState(initialNote);
+  const dirty = note !== initialNote;
+  return (
+    <View className="gap-1">
+      <Text className="text-[10px] uppercase tracking-wider text-ink-3">Ghi chú</Text>
+      <TextInput
+        value={note}
+        onChangeText={setNote}
+        onBlur={() => { if (dirty) onSave(note); }}
+        placeholder="Tên bác sĩ, tên phòng khám, lý do tái khám…"
+        placeholderTextColor="#b5b5b5"
+        multiline
+        style={{
+          borderWidth: 1, borderColor: "#c8c8c2", borderRadius: 8,
+          padding: 10, fontSize: 13, color: "#1a1a1a",
+          minHeight: 72, textAlignVertical: "top",
+        }}
+      />
+      {dirty && (
+        <Pressable onPress={() => onSave(note)} className="self-end">
+          <Text className="text-xs text-accent-ink">Lưu ghi chú</Text>
+        </Pressable>
+      )}
+    </View>
   );
 }
 
