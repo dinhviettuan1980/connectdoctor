@@ -30,24 +30,34 @@ async function registerNativeToken(uid: string): Promise<void> {
   await updateDoc(doc(db, "users", uid), { expoPushToken: tokenData.data });
 }
 
-// ── Web (FCM) ─────────────────────────────────────────────────────────────────
+// ── Web (FCM via service worker message) ─────────────────────────────────────
+// firebase/messaging cannot be imported directly in Metro — the token is
+// obtained inside the service worker and posted back to the main thread.
 
-async function registerWebToken(uid: string): Promise<void> {
+function registerWebToken(uid: string): void {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
   const vapidKey = process.env.EXPO_PUBLIC_FCM_VAPID_KEY;
   if (!vapidKey) return;
 
-  try {
-    const { getMessaging, getToken } = await import("firebase/messaging");
-    const { app } = await import("./firebase");
-    const messaging = getMessaging(app);
-    const token = await getToken(messaging, { vapidKey });
-    if (token) {
-      await updateDoc(doc(db, "users", uid), { fcmToken: token });
+  navigator.serviceWorker.ready.then(async (reg) => {
+    try {
+      // Ask the SW to get the FCM token and post it back
+      const sw = reg.active;
+      if (!sw) return;
+
+      const messageChannel = new MessageChannel();
+      messageChannel.port1.onmessage = async (event) => {
+        const token = event.data?.fcmToken as string | undefined;
+        if (token) {
+          await updateDoc(doc(db, "users", uid), { fcmToken: token });
+        }
+      };
+      sw.postMessage({ type: "GET_FCM_TOKEN", vapidKey, uid }, [messageChannel.port2]);
+    } catch (e) {
+      console.warn("[notifications] web FCM token:", e);
     }
-  } catch (e) {
-    // Service worker not ready or permission denied — non-fatal
-    console.warn("[notifications] web FCM:", e);
-  }
+  });
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -55,7 +65,7 @@ async function registerWebToken(uid: string): Promise<void> {
 export async function registerPushToken(uid: string): Promise<void> {
   try {
     if (Platform.OS === "web") {
-      await registerWebToken(uid);
+      registerWebToken(uid);
     } else {
       await registerNativeToken(uid);
     }
@@ -72,8 +82,17 @@ export async function getNotificationResponse() {
 
 export async function addNotificationListener(
   handler: (notification: { threadId?: string }) => void,
-) {
-  if (Platform.OS === "web") return () => {};
+): Promise<() => void> {
+  if (Platform.OS === "web") {
+    // Listen for NOTIFICATION_CLICK messages from the service worker
+    const listener = (event: MessageEvent) => {
+      if (event.data?.type === "NOTIFICATION_CLICK") {
+        handler({ threadId: event.data.threadId });
+      }
+    };
+    navigator.serviceWorker?.addEventListener("message", listener);
+    return () => navigator.serviceWorker?.removeEventListener("message", listener);
+  }
   const Notifications = await import("expo-notifications");
   const sub = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data as Record<string, unknown>;

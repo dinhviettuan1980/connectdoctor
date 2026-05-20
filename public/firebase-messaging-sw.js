@@ -3,26 +3,44 @@ importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-com
 
 let messaging = null;
 
-// Receive Firebase config from the main thread
-self.addEventListener("message", (event) => {
-  if (event.data?.type !== "FIREBASE_CONFIG") return;
-  if (firebase.apps.length) return; // already initialized
-  firebase.initializeApp(event.data.config);
-  messaging = firebase.messaging();
+self.addEventListener("message", async (event) => {
+  const { type, config, vapidKey, uid } = event.data ?? {};
 
-  // Handle background push messages (app closed or tab not focused)
-  messaging.onBackgroundMessage((payload) => {
-    const { title, body } = payload.notification ?? {};
-    self.registration.showNotification(title ?? "ConnectDoctor", {
-      body: body ?? "Bạn có tin nhắn mới",
-      icon: "/icon.png",
-      badge: "/icon.png",
-      data: { threadId: payload.data?.threadId },
-    });
-  });
+  // Main thread sends Firebase config on SW registration
+  if (type === "FIREBASE_CONFIG") {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(config);
+      messaging = firebase.messaging();
+      messaging.onBackgroundMessage((payload) => {
+        const { title, body } = payload.notification ?? {};
+        self.registration.showNotification(title ?? "ConnectDoctor", {
+          body: body ?? "Bạn có tin nhắn mới",
+          icon: "/icon.png",
+          badge: "/icon.png",
+          data: { threadId: payload.data?.threadId },
+        });
+      });
+    }
+    return;
+  }
+
+  // Main thread asks SW to get the FCM registration token
+  if (type === "GET_FCM_TOKEN" && event.ports[0]) {
+    try {
+      if (!messaging) {
+        event.ports[0].postMessage({ fcmToken: null });
+        return;
+      }
+      const token = await messaging.getToken({ vapidKey });
+      event.ports[0].postMessage({ fcmToken: token });
+    } catch (e) {
+      console.warn("[sw] getToken failed:", e);
+      event.ports[0].postMessage({ fcmToken: null });
+    }
+  }
 });
 
-// On notification click: focus existing tab or open new one
+// Notification tap: focus existing tab or open new one
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const threadId = event.notification.data?.threadId;
