@@ -100,7 +100,15 @@ service cloud.firestore {
     // statically prove list queries like where("patientUid","==",uid) are safe.
 
     match /chatThreads/{threadId} {
-      allow read: if isAuthed() && (
+      // get: threadId-based check works even when document doesn't exist yet
+      // (resource is null for non-existent docs, so resource.data would throw)
+      allow get: if isAuthed() && (
+        threadId.split("_")[0] == request.auth.uid ||
+        threadId.split("_")[1] == request.auth.uid
+      );
+      // list: resource.data check is required so Firestore can verify
+      // where("patientUid","==",uid) queries are safe
+      allow list: if isAuthed() && (
         resource.data.patientUid == request.auth.uid ||
         resource.data.doctorUid == request.auth.uid
       );
@@ -110,6 +118,7 @@ service cloud.firestore {
         request.auth.uid == request.resource.data.doctorUid
       );
 
+      // update: document always exists at update time, resource.data is safe
       allow update: if isAuthed() && (
         resource.data.patientUid == request.auth.uid ||
         resource.data.doctorUid == request.auth.uid

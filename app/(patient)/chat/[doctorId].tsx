@@ -67,6 +67,9 @@ export default function ChatThread() {
     setSending(true);
     try {
       await sendMessage(threadId, user.uid, doctorId ?? "", text);
+    } catch (err) {
+      console.error("[chat send]", err);
+      setDraft(text); // restore on failure so user doesn't lose the message
     } finally {
       setSending(false);
     }

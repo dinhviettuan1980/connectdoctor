@@ -149,7 +149,7 @@ export function subscribeToMessages(
       }));
       callback(messages);
     },
-    () => callback([]),
+    (err) => { console.error("[subscribeToMessages]", err); callback([]); },
   );
 }
 
