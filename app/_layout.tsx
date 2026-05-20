@@ -1,5 +1,5 @@
 import "@/global.css";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -7,17 +7,53 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, ActivityIndicator } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAuthStore, initAuthListener } from "@/hooks/useAuth";
+import { registerPushToken, getNotificationResponse, addNotificationListener } from "@/lib/notifications";
 
 const queryClient = new QueryClient();
+
+function navigateToThread(threadId: string, role: string, router: ReturnType<typeof useRouter>) {
+  const [patientUid, doctorUid] = threadId.split("_");
+  if (role === "doctor") {
+    router.push(`/(doctor)/chat/${patientUid}` as any);
+  } else {
+    router.push(`/(patient)/chat/${doctorUid}` as any);
+  }
+}
 
 function AuthGate() {
   const { user, initializing } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+  const notifListenerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     return initAuthListener();
   }, []);
+
+  // Register push token and handle notification taps after login
+  useEffect(() => {
+    if (!user) {
+      notifListenerRef.current?.();
+      notifListenerRef.current = null;
+      return;
+    }
+
+    registerPushToken(user.uid);
+
+    // Handle tap on notification that opened the app from killed state
+    getNotificationResponse().then((response) => {
+      if (!response) return;
+      const threadId = (response.notification.request.content.data as Record<string, unknown>)?.threadId as string | undefined;
+      if (threadId) navigateToThread(threadId, user.role, router);
+    });
+
+    // Handle tap while app is in background
+    addNotificationListener(({ threadId }) => {
+      if (threadId) navigateToThread(threadId, user.role, router);
+    }).then((unsub) => {
+      notifListenerRef.current = unsub;
+    });
+  }, [user?.uid]);
 
   useEffect(() => {
     if (initializing) return;

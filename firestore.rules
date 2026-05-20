@@ -36,7 +36,11 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isAuthed();
       allow create: if isOwner(uid);
-      allow update: if isOwner(uid);
+      allow update: if isOwner(uid) ||
+        // Cloud Function (admin SDK) updates push tokens on behalf of users
+        (isAuthed() && request.auth.uid == uid &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(["expoPushToken", "fcmToken"]));
     }
 
     // ─── /patientProfiles/{uid} ──────────────────────────────────────────────

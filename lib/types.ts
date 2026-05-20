@@ -1,6 +1,6 @@
 // Shared types across the app.
 
-export type Role = "patient" | "doctor";
+export type Role = "patient" | "doctor" | "admin";
 
 export interface AppUser {
   uid: string;
@@ -9,6 +9,8 @@ export interface AppUser {
   displayName: string | null;
   role: Role;
   createdAt: number;
+  expoPushToken?: string;  // iOS / Android
+  fcmToken?: string;       // Web push
 }
 
 export interface PatientProfile {
