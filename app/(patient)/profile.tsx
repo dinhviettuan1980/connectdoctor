@@ -16,6 +16,7 @@ import { Section, Segmented } from "@/components/ui/Segmented";
 import { MetricChart } from "@/components/MetricChart";
 import { useAuthStore } from "@/hooks/useAuth";
 import { signOut } from "@/lib/auth";
+import { healthService, type HeartRateSample } from "@/lib/health";
 import {
   createPrescription,
   updatePrescriptionNote,
@@ -401,6 +402,86 @@ function NoteEditor({ initialNote, onSave }: { initialNote: string; onSave: (v: 
 // Metrics tab
 // ---------------------------------------------------------------------------
 
+function HealthSyncCard() {
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [samples, setSamples] = useState<HeartRateSample[]>([]);
+
+  useEffect(() => {
+    healthService.isAvailable().then(setAvailable);
+  }, []);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await healthService.requestPermissions(["heartRate"]);
+      const end = Date.now();
+      const start = end - 24 * 60 * 60 * 1000; // last 24 h
+      const data = await healthService.getHeartRateSamples(start, end);
+      setSamples(data.slice(-8)); // show last 8 readings
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Not yet on a native build — show informational card
+  if (available === false) {
+    return (
+      <Card variant="soft" padding="md">
+        <Text className="font-bold text-ink text-xs mb-1">Đồng bộ từ đồng hồ thông minh</Text>
+        <Text className="text-[11px] text-ink-3 mb-3">
+          Hỗ trợ Garmin, Apple Watch, Samsung Watch qua HealthKit (iOS) và Health Connect (Android).
+          Cần build EAS để kích hoạt.
+        </Text>
+        {samples.length === 0 ? (
+          <Button variant="secondary" size="sm" loading={syncing} onPress={handleSync}>
+            Xem dữ liệu mẫu
+          </Button>
+        ) : (
+          <View className="gap-1">
+            {samples.map((s) => (
+              <View key={s.timestamp} className="flex-row items-center gap-2">
+                <Text className="font-mono text-[11px] text-ink-3" style={{ width: 110 }}>
+                  {new Date(s.timestamp).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}
+                </Text>
+                <Text className="font-mono font-bold text-ink text-sm">{s.value}</Text>
+                <Text className="text-[10px] text-ink-3">bpm · {s.source}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </Card>
+    );
+  }
+
+  // Available (native build with HealthKit / Health Connect)
+  return (
+    <Card variant="accent" padding="md">
+      <View className="flex-row justify-between items-center mb-2">
+        <Text className="font-bold text-accent-ink text-xs">Đồng bộ từ đồng hồ</Text>
+        <Button variant="primary" size="sm" loading={syncing} onPress={handleSync}>
+          Đồng bộ
+        </Button>
+      </View>
+      {samples.length === 0 ? (
+        <Text className="text-[11px] text-ink-3">Chưa có dữ liệu. Nhấn Đồng bộ để tải.</Text>
+      ) : (
+        <View className="gap-1">
+          {samples.map((s) => (
+            <View key={s.timestamp} className="flex-row items-center gap-2">
+              <Text className="font-mono text-[11px] text-ink-3" style={{ width: 110 }}>
+                {new Date(s.timestamp).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}
+              </Text>
+              <Text className="font-mono font-bold text-ink text-sm">{s.value}</Text>
+              <Text className="text-[10px] text-ink-3">bpm · {s.source}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </Card>
+  );
+}
+
 function MetricsTab({ onAdd }: { onAdd: () => void }) {
   const [chart, setChart] = useState(true);
   const log = [
@@ -465,6 +546,8 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
           </View>
         )}
       </Card>
+
+      <HealthSyncCard />
 
       <Button variant="primary" block leftIcon={<Text>📷</Text>} onPress={onAdd}>
         OCR phiếu xét nghiệm
