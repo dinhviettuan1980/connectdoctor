@@ -25,3 +25,6 @@ firestore-debug.log
 
 expo-env.d.ts
 # @end expo-cli
+# Cloud Functions — install separately before deploying
+functions/node_modules/
+functions/lib/
