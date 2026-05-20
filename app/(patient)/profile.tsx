@@ -28,6 +28,8 @@ import {
   type PrescriptionImage,
 } from "@/lib/prescriptions";
 import { useRouter } from "expo-router";
+import { addMetric, deleteMetric, subscribeToMetrics } from "@/lib/metrics";
+import type { MetricEntry, MetricType } from "@/lib/types";
 
 function formatDateTime(ts: number): string {
   return new Date(ts).toLocaleString("vi-VN", {
@@ -482,67 +484,136 @@ function HealthSyncCard() {
   );
 }
 
+type MetricDef = { label: string; unit: string; dual?: boolean };
+
+const METRIC_DEFS: Partial<Record<MetricType, MetricDef>> = {
+  blood_pressure: { label: "Huyết áp",    unit: "mmHg",    dual: true },
+  heart_rate:     { label: "Nhịp tim",    unit: "bpm" },
+  blood_glucose:  { label: "Đường máu",   unit: "mmol/L" },
+  cholesterol:    { label: "Cholesterol", unit: "mmol/L" },
+};
+const VISIBLE_TYPES = Object.keys(METRIC_DEFS) as MetricType[];
+
+function fmtTs(ts: number) {
+  return new Date(ts).toLocaleString("vi-VN", {
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+}
+
 function MetricsTab({ onAdd }: { onAdd: () => void }) {
+  const user = useAuthStore((s) => s.user);
+  const [activeType, setActiveType] = useState<MetricType>("blood_pressure");
+  const [allMetrics, setAllMetrics] = useState<MetricEntry[]>([]);
   const [chart, setChart] = useState(true);
-  const log = [
-    ["18/05 · 07:20", "124/80", "sáng"],
-    ["16/05 · 21:10", "132/86", "tối"],
-    ["15/05 · 08:00", "128/82", "sáng"],
-    ["12/05 · 19:30", "135/88", "tối"],
-  ];
+  const [showAdd, setShowAdd] = useState(false);
+  const [valA, setValA] = useState("");
+  const [valB, setValB] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    return subscribeToMetrics(user.uid, setAllMetrics);
+  }, [user?.uid]);
+
+  const def = METRIC_DEFS[activeType]!;
+  const entries = allMetrics
+    .filter((e) => e.type === activeType)
+    .sort((a, b) => b.measuredAt - a.measuredAt);
+
+  const bpPoints = entries.slice(0, 9).reverse();
+  const systolicArr  = bpPoints.map((e) => parseInt(e.value.split("/")[0]) || 0);
+  const diastolicArr = bpPoints.map((e) => parseInt(e.value.split("/")[1] ?? "0") || 0);
+  const bpAvg = bpPoints.length
+    ? `TB ${Math.round(systolicArr.reduce((s, v) => s + v, 0) / bpPoints.length)}/${
+        Math.round(diastolicArr.reduce((s, v) => s + v, 0) / bpPoints.length)}`
+    : null;
+
+  const openAdd = () => { setValA(""); setValB(""); setShowAdd(true); };
+
+  const handleSave = async () => {
+    if (!user?.uid) return;
+    const a = valA.trim();
+    const b = valB.trim();
+    if (!a || (def.dual && !b)) return;
+    setSaving(true);
+    try {
+      await addMetric(user.uid, activeType, def.label, def.dual ? `${a}/${b}` : a, def.unit || undefined);
+      setShowAdd(false);
+    } catch (err) {
+      console.error("[addMetric]", err);
+      Alert.alert("Lỗi", "Không thể lưu chỉ số.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = (entry: MetricEntry) => {
+    Alert.alert("Xoá chỉ số", `Xoá lần đo ${entry.value} ${def.unit}?`, [
+      { text: "Huỷ", style: "cancel" },
+      { text: "Xoá", style: "destructive", onPress: () => deleteMetric(entry.id).catch(console.error) },
+    ]);
+  };
+
+  const showChart = chart && activeType === "blood_pressure" && bpPoints.length > 0;
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
       <View className="flex-row gap-2 flex-wrap">
-        <Chip variant="accent">Huyết áp</Chip>
-        <Chip>Nhịp tim</Chip>
-        <Chip>Đường máu</Chip>
-        <Chip>Cholesterol</Chip>
-        <Chip variant="soft">+</Chip>
+        {VISIBLE_TYPES.map((t) => (
+          <Chip key={t} variant={activeType === t ? "accent" : "default"} onPress={() => setActiveType(t)}>
+            {METRIC_DEFS[t]!.label}
+          </Chip>
+        ))}
       </View>
 
       <Card padding="md">
-        <View className="flex-row justify-between items-center mb-2">
+        <View className="flex-row justify-between items-center mb-3">
           <View>
-            <Text className="font-bold text-ink">Huyết áp</Text>
-            <Text className="text-[11px] text-ink-3">30 ngày qua · mmHg</Text>
+            <Text className="font-bold text-ink">{def.label}</Text>
+            <Text className="text-[11px] text-ink-3">
+              {entries.length > 0 ? `${entries.length} lần đo · ${def.unit}` : def.unit}
+            </Text>
           </View>
-          <Segmented
-            value={chart ? "chart" : "list"}
-            onChange={(v) => setChart(v === "chart")}
-            options={[
-              { value: "list", label: "List" },
-              { value: "chart", label: "Chart" },
-            ]}
-          />
+          <View className="flex-row gap-2 items-center">
+            {activeType === "blood_pressure" && entries.length > 1 && (
+              <Segmented
+                value={chart ? "chart" : "list"}
+                onChange={(v) => setChart(v === "chart")}
+                options={[{ value: "list", label: "List" }, { value: "chart", label: "Chart" }]}
+              />
+            )}
+            <Button variant="secondary" size="sm" onPress={openAdd}>+ Thêm</Button>
+          </View>
         </View>
-        {chart ? (
+
+        {entries.length === 0 ? (
+          <Text className="text-center text-sm text-ink-3 py-6">
+            Chưa có dữ liệu.{"\n"}Nhấn "+ Thêm" để ghi lần đo đầu tiên.
+          </Text>
+        ) : showChart ? (
           <>
-            <MetricChart
-              systolic={[120, 132, 128, 135, 124, 130, 125, 128, 124]}
-              diastolic={[78, 86, 82, 88, 80, 84, 78, 82, 80]}
-            />
+            <MetricChart systolic={systolicArr} diastolic={diastolicArr} />
             <View className="flex-row justify-between mt-1">
-              <Text className="text-[10px] text-ink-3">
-                Tâm thu (xanh) · Tâm trương (đứt)
-              </Text>
-              <Text className="text-[10px] text-ink-3">TB 128/82</Text>
+              <Text className="text-[10px] text-ink-3">Tâm thu (xanh) · Tâm trương (đứt)</Text>
+              {bpAvg && <Text className="text-[10px] text-ink-3">{bpAvg}</Text>}
             </View>
           </>
         ) : (
-          <View className="gap-1.5">
-            {log.map(([t, v, when]) => (
-              <View
-                key={t}
-                className="flex-row items-center py-1.5 border-b border-dashed border-line-soft"
+          <View>
+            {entries.slice(0, 10).map((e) => (
+              <Pressable
+                key={e.id}
+                onLongPress={() => handleDelete(e)}
+                className="flex-row items-center py-2 border-b border-dashed border-line-soft"
               >
-                <Text className="font-mono text-[11px] text-ink-2" style={{ width: 100 }}>
-                  {t}
-                </Text>
-                <Text className="flex-1 font-mono font-bold text-ink">{v}</Text>
-                <Chip variant="soft">{when}</Chip>
-              </View>
+                <Text className="font-mono text-[11px] text-ink-3" style={{ width: 110 }}>{fmtTs(e.measuredAt)}</Text>
+                <Text className="flex-1 font-mono font-bold text-ink">{e.value}</Text>
+                <Text className="text-[10px] text-ink-3">{def.unit}</Text>
+              </Pressable>
             ))}
+            {entries.length > 10 && (
+              <Text className="text-[10px] text-ink-3 text-center mt-2">+{entries.length - 10} lần đo nữa</Text>
+            )}
           </View>
         )}
       </Card>
@@ -552,6 +623,45 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
       <Button variant="primary" block leftIcon={<Text>📷</Text>} onPress={onAdd}>
         OCR phiếu xét nghiệm
       </Button>
+
+      {/* Add metric modal */}
+      <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1, justifyContent: "flex-end" }}
+        >
+          <Pressable
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)" }}
+            onPress={() => setShowAdd(false)}
+          />
+          <View className="bg-paper rounded-t-2xl px-5 pt-5 pb-8 gap-4">
+            <Text className="font-bold text-base text-ink">Thêm đo {def.label}</Text>
+            {def.dual ? (
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Tâm thu (mmHg)</Text>
+                  <Input value={valA} onChangeText={setValA} placeholder="VD: 120" keyboardType="numeric" returnKeyType="next" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Tâm trương (mmHg)</Text>
+                  <Input value={valB} onChangeText={setValB} placeholder="VD: 80" keyboardType="numeric" returnKeyType="done" onSubmitEditing={handleSave} />
+                </View>
+              </View>
+            ) : (
+              <View>
+                <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">
+                  Giá trị{def.unit ? ` (${def.unit})` : ""}
+                </Text>
+                <Input value={valA} onChangeText={setValA} placeholder="Nhập giá trị…" keyboardType="numeric" returnKeyType="done" onSubmitEditing={handleSave} />
+              </View>
+            )}
+            <View className="flex-row gap-3">
+              <Button variant="secondary" size="md" block onPress={() => setShowAdd(false)}>Huỷ</Button>
+              <Button variant="primary" size="md" block loading={saving} onPress={handleSave}>Lưu</Button>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScrollView>
   );
 }
