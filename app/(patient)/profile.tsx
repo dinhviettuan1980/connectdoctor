@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  View, Text, ScrollView, Pressable, TextInput,
+  View, Text, ScrollView, Pressable, TextInput, FlatList,
   Modal, Image, ActivityIndicator, Alert, useWindowDimensions,
   KeyboardAvoidingView, Platform,
 } from "react-native";
@@ -29,7 +29,8 @@ import {
 } from "@/lib/prescriptions";
 import { useRouter } from "expo-router";
 import { addMetric, deleteMetric, subscribeToMetrics } from "@/lib/metrics";
-import type { MetricEntry, MetricType } from "@/lib/types";
+import { getPatientProfile, savePatientProfile } from "@/lib/patientProfile";
+import type { MetricEntry, MetricType, PatientProfile } from "@/lib/types";
 
 function formatDateTime(ts: number): string {
   return new Date(ts).toLocaleString("vi-VN", {
@@ -37,6 +38,206 @@ function formatDateTime(ts: number): string {
     hour: "2-digit", minute: "2-digit",
   });
 }
+
+// ---------------------------------------------------------------------------
+// PickerField + PickerSheet (single-select bottom sheet)
+// ---------------------------------------------------------------------------
+
+function PickerField({
+  label, value, placeholder, onPress,
+}: { label: string; value: string; placeholder: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="border border-line rounded-lg px-3 py-2.5"
+    >
+      <Text className="text-[10px] text-ink-3 mb-0.5">{label}</Text>
+      <View className="flex-row justify-between items-center">
+        <Text className={value ? "text-sm text-ink" : "text-sm text-ink-4"}>
+          {value || placeholder}
+        </Text>
+        <Text className="text-ink-4 text-xs ml-1">▾</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function PickerSheet({
+  visible, title, options, value, onSelect, onClose,
+}: {
+  visible: boolean; title: string; options: string[];
+  value: string; onSelect: (v: string) => void; onClose: () => void;
+}) {
+  const listRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    const idx = options.indexOf(value);
+    if (idx >= 0) {
+      setTimeout(() => {
+        listRef.current?.scrollToIndex({ index: idx, animated: false, viewPosition: 0.5 });
+      }, 80);
+    }
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }}>
+        <Pressable
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)" }}
+          onPress={onClose}
+        />
+        <View className="bg-paper rounded-t-2xl overflow-hidden" style={{ maxHeight: "70%" }}>
+          <View className="flex-row justify-between items-center px-5 py-4 border-b border-line-soft">
+            <Text className="font-bold text-base text-ink">{title}</Text>
+            <Pressable onPress={onClose} hitSlop={12}><Text className="text-ink-3 text-base">✕</Text></Pressable>
+          </View>
+          <FlatList
+            ref={listRef}
+            data={options}
+            keyExtractor={(item) => item}
+            getItemLayout={(_, i) => ({ length: 48, offset: 48 * i, index: i })}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => { onSelect(item); onClose(); }}
+                className="flex-row items-center justify-between px-5"
+                style={{ height: 48, borderBottomWidth: 1, borderBottomColor: "#e8e8e0" }}
+              >
+                <Text className={item === value ? "text-sm font-bold text-accent-ink" : "text-sm text-ink"}>
+                  {item}
+                </Text>
+                {item === value && <Text className="text-accent-ink">✓</Text>}
+              </Pressable>
+            )}
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MultiSelectSheet (multi-select bottom sheet for conditions / allergies)
+// ---------------------------------------------------------------------------
+
+function MultiSelectSheet({
+  visible, title, options, selected, onDone, onClose,
+}: {
+  visible: boolean; title: string; options: string[];
+  selected: string[]; onDone: (v: string[]) => void; onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<string[]>(selected);
+  const [custom, setCustom] = useState("");
+
+  useEffect(() => { if (visible) setDraft(selected); }, [visible]);
+
+  const toggle = (item: string) =>
+    setDraft((d) => d.includes(item) ? d.filter((x) => x !== item) : [...d, item]);
+
+  const addCustom = () => {
+    const val = custom.trim();
+    if (!val || draft.includes(val)) return;
+    setDraft((d) => [...d, val]);
+    setCustom("");
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1, justifyContent: "flex-end" }}
+      >
+        <Pressable
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)" }}
+          onPress={onClose}
+        />
+        <View className="bg-paper rounded-t-2xl overflow-hidden" style={{ maxHeight: "75%" }}>
+          <View className="flex-row justify-between items-center px-5 py-4 border-b border-line-soft">
+            <Text className="font-bold text-base text-ink">{title}</Text>
+            <Pressable onPress={onClose} hitSlop={12}><Text className="text-ink-3 text-base">✕</Text></Pressable>
+          </View>
+
+          <FlatList
+            data={options}
+            keyExtractor={(item) => item}
+            getItemLayout={(_, i) => ({ length: 48, offset: 48 * i, index: i })}
+            renderItem={({ item }) => {
+              const active = draft.includes(item);
+              return (
+                <Pressable
+                  onPress={() => toggle(item)}
+                  className="flex-row items-center justify-between px-5"
+                  style={{ height: 48, borderBottomWidth: 1, borderBottomColor: "#e8e8e0" }}
+                >
+                  <Text className={active ? "text-sm font-bold text-accent-ink" : "text-sm text-ink"}>
+                    {item}
+                  </Text>
+                  <View
+                    className={[
+                      "w-5 h-5 rounded border items-center justify-center",
+                      active ? "bg-accent border-accent-ink" : "border-line-soft",
+                    ].join(" ")}
+                  >
+                    {active && <Text className="text-[10px] font-bold text-paper">✓</Text>}
+                  </View>
+                </Pressable>
+              );
+            }}
+            ListFooterComponent={
+              <View className="flex-row gap-2 px-4 py-3 border-t border-line-soft">
+                <View className="flex-1">
+                  <Input
+                    value={custom}
+                    onChangeText={setCustom}
+                    placeholder="Thêm khác…"
+                    returnKeyType="done"
+                    onSubmitEditing={addCustom}
+                  />
+                </View>
+                <Button variant="secondary" size="sm" onPress={addCustom}>+</Button>
+              </View>
+            }
+          />
+
+          <View className="px-5 pb-6 pt-3 border-t border-line-soft">
+            <Button variant="primary" block onPress={() => { onDone(draft); onClose(); }}>
+              Xác nhận ({draft.length} đã chọn)
+            </Button>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Preset lists
+// ---------------------------------------------------------------------------
+
+const CONDITION_OPTIONS = [
+  "Tăng huyết áp", "Tiểu đường type 1", "Tiểu đường type 2",
+  "Bệnh tim mạch", "Suy tim", "Rối loạn nhịp tim",
+  "Hen suyễn", "COPD", "Bệnh phổi mạn",
+  "Bệnh thận mạn", "Sỏi thận",
+  "Viêm khớp", "Loãng xương", "Gout",
+  "Rối loạn tuyến giáp", "Cường giáp", "Nhược giáp",
+  "Bệnh gan", "Viêm gan B", "Viêm gan C", "Xơ gan",
+  "Ung thư", "Đột quỵ", "Động kinh",
+  "Trầm cảm", "Rối loạn lo âu",
+  "HIV/AIDS", "Lao phổi",
+];
+
+const ALLERGY_OPTIONS = [
+  "Penicillin", "Amoxicillin", "Aspirin", "Ibuprofen",
+  "Paracetamol", "Sulfamid", "Codein", "Morphin",
+  "Thuốc cản quang (iốt)",
+  "Tôm", "Cua", "Sò/Hàu", "Cá", "Hải sản",
+  "Lạc (đậu phộng)", "Đậu nành", "Sữa bò", "Trứng",
+  "Gluten (lúa mì)", "Mè (vừng)",
+  "Phấn hoa", "Bụi nhà", "Lông thú",
+  "Mủ cao su (latex)", "Nọc ong",
+  "Niken", "Mỹ phẩm / hương liệu",
+];
 
 const TABS = [
   { key: "info", label: "Thông tin" },
@@ -73,46 +274,181 @@ export default function PatientProfile() {
 // Info tab
 // ---------------------------------------------------------------------------
 
+const GENDER_DISPLAY: Record<string, string> = { male: "Nam", female: "Nữ", other: "Khác" };
+const GENDER_VALUE: Record<string, "male" | "female" | "other"> = { Nam: "male", Nữ: "female", Khác: "other" };
+
 function InfoTab() {
+  const user = useAuthStore((s) => s.user);
+  const [profile, setProfile] = useState<Partial<PatientProfile>>({});
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [picker, setPicker] = useState<string | null>(null);
+  const [multiPicker, setMultiPicker] = useState<"conditions" | "allergies" | null>(null);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    getPatientProfile(user.uid)
+      .then((p) => { if (p) { setProfile(p); setName(p.fullName ?? ""); } })
+      .finally(() => setLoading(false));
+  }, [user?.uid]);
+
+  const save = (update: Partial<Omit<PatientProfile, "uid">>) => {
+    if (!user?.uid) return;
+    setProfile((prev) => ({ ...prev, ...update }));
+    savePatientProfile(user.uid, update).catch(console.error);
+  };
+
+  const currentYear = new Date().getFullYear();
+  const heightOptions = Array.from({ length: 121 }, (_, i) => `${100 + i} cm`);
+  const weightOptions = Array.from({ length: 121 }, (_, i) => `${30 + i} kg`);
+  const birthYearOptions = Array.from({ length: currentYear - 1949 }, (_, i) => `${currentYear - 10 - i}`);
+  const bloodTypeOptions = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+  const genderOptions = ["Nam", "Nữ", "Khác"];
+
+  const heightStr = profile.heightCm ? `${profile.heightCm} cm` : "";
+  const weightStr = profile.weightKg ? `${profile.weightKg} kg` : "";
+  const birthYearStr = profile.birthYear ? `${profile.birthYear}` : "";
+
+  const bmi =
+    profile.heightCm && profile.weightKg
+      ? (profile.weightKg / (profile.heightCm / 100) ** 2).toFixed(1)
+      : null;
+  const bmiLabel = bmi
+    ? parseFloat(bmi) < 18.5
+      ? "Thiếu cân"
+      : parseFloat(bmi) < 25
+      ? "Bình thường"
+      : parseFloat(bmi) < 30
+      ? "Thừa cân"
+      : "Béo phì"
+    : null;
+  const age = profile.birthYear ? currentYear - profile.birthYear : null;
+  const genderDisplay = profile.gender ? GENDER_DISPLAY[profile.gender] : "";
+
+  if (loading) return <ActivityIndicator style={{ marginTop: 48 }} />;
+
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      {/* Summary card */}
       <Card variant="accent" padding="md">
-        <View className="flex-row justify-between items-start">
+        <View className="flex-row justify-between items-center">
           <View>
-            <Text className="font-bold text-ink">Nguyễn Văn A</Text>
-            <Text className="text-[11px] text-ink-3">Nam · 33 tuổi</Text>
+            <Text className="font-bold text-ink">{name || "Chưa có tên"}</Text>
+            <Text className="text-[11px] text-ink-3">
+              {[genderDisplay, age ? `${age} tuổi` : null, profile.bloodType]
+                .filter(Boolean)
+                .join(" · ")}
+            </Text>
           </View>
-          <View className="items-end">
-            <Text className="font-mono font-bold text-base text-ink">23.0</Text>
-            <Text className="text-[10px] text-ink-3">BMI · bình thường</Text>
-          </View>
+          {bmi && (
+            <View className="items-end">
+              <Text className="font-mono font-bold text-base text-ink">{bmi}</Text>
+              <Text className="text-[10px] text-ink-3">BMI · {bmiLabel}</Text>
+            </View>
+          )}
         </View>
       </Card>
 
+      {/* Name */}
+      <Input
+        label="Họ và tên"
+        value={name}
+        onChangeText={setName}
+        onBlur={() => save({ fullName: name })}
+        placeholder="Nguyễn Văn A"
+        returnKeyType="done"
+      />
+
+      {/* Height & Weight */}
       <View className="flex-row gap-2">
-        <View className="flex-1"><Input label="Chiều cao" value="172 cm" /></View>
-        <View className="flex-1"><Input label="Cân nặng" value="68 kg" /></View>
-      </View>
-      <View className="flex-row gap-2">
-        <View className="flex-1"><Input label="Năm sinh" value="1992" /></View>
-        <View className="flex-1"><Input label="Nhóm máu" value="O+" /></View>
+        <View className="flex-1">
+          <PickerField label="Chiều cao" value={heightStr} placeholder="Chọn…" onPress={() => setPicker("height")} />
+        </View>
+        <View className="flex-1">
+          <PickerField label="Cân nặng" value={weightStr} placeholder="Chọn…" onPress={() => setPicker("weight")} />
+        </View>
       </View>
 
-      <Section title="Bệnh nền" action={<Text className="text-[11px] underline text-ink">+ Thêm</Text>}>
-        <View className="flex-row flex-wrap gap-1.5">
-          <Chip>Tăng huyết áp</Chip>
-          <Chip>Tiểu đường II</Chip>
-          <Chip variant="soft">+</Chip>
+      {/* Birth year & Blood type */}
+      <View className="flex-row gap-2">
+        <View className="flex-1">
+          <PickerField label="Năm sinh" value={birthYearStr} placeholder="Chọn…" onPress={() => setPicker("birthYear")} />
         </View>
+        <View className="flex-1">
+          <PickerField label="Nhóm máu" value={profile.bloodType ?? ""} placeholder="Chọn…" onPress={() => setPicker("bloodType")} />
+        </View>
+      </View>
+
+      {/* Gender */}
+      <PickerField label="Giới tính" value={genderDisplay} placeholder="Chọn…" onPress={() => setPicker("gender")} />
+
+      {/* Conditions */}
+      <Section
+        title="Bệnh nền"
+        action={
+          <Pressable onPress={() => setMultiPicker("conditions")} hitSlop={8}>
+            <Text className="text-[11px] text-accent-ink">Chỉnh sửa</Text>
+          </Pressable>
+        }
+      >
+        {(profile.conditions?.length ?? 0) > 0 ? (
+          <View className="flex-row flex-wrap gap-1.5">
+            {profile.conditions!.map((c) => <Chip key={c}>{c}</Chip>)}
+          </View>
+        ) : (
+          <Text className="text-[11px] text-ink-3">Chưa có. Nhấn Chỉnh sửa để thêm.</Text>
+        )}
       </Section>
 
-      <Section title="Dị ứng">
-        <View className="flex-row flex-wrap gap-1.5">
-          <Chip>Penicillin</Chip>
-          <Chip>Tôm cua</Chip>
-          <Chip variant="soft">+</Chip>
-        </View>
+      {/* Allergies */}
+      <Section
+        title="Dị ứng"
+        action={
+          <Pressable onPress={() => setMultiPicker("allergies")} hitSlop={8}>
+            <Text className="text-[11px] text-accent-ink">Chỉnh sửa</Text>
+          </Pressable>
+        }
+      >
+        {(profile.allergies?.length ?? 0) > 0 ? (
+          <View className="flex-row flex-wrap gap-1.5">
+            {profile.allergies!.map((a) => <Chip key={a}>{a}</Chip>)}
+          </View>
+        ) : (
+          <Text className="text-[11px] text-ink-3">Chưa có. Nhấn Chỉnh sửa để thêm.</Text>
+        )}
       </Section>
+
+      {/* Single-select pickers */}
+      <PickerSheet
+        visible={picker === "height"} title="Chiều cao" options={heightOptions} value={heightStr}
+        onSelect={(v) => save({ heightCm: parseInt(v) })} onClose={() => setPicker(null)}
+      />
+      <PickerSheet
+        visible={picker === "weight"} title="Cân nặng" options={weightOptions} value={weightStr}
+        onSelect={(v) => save({ weightKg: parseInt(v) })} onClose={() => setPicker(null)}
+      />
+      <PickerSheet
+        visible={picker === "birthYear"} title="Năm sinh" options={birthYearOptions} value={birthYearStr}
+        onSelect={(v) => save({ birthYear: parseInt(v) })} onClose={() => setPicker(null)}
+      />
+      <PickerSheet
+        visible={picker === "bloodType"} title="Nhóm máu" options={bloodTypeOptions} value={profile.bloodType ?? ""}
+        onSelect={(v) => save({ bloodType: v })} onClose={() => setPicker(null)}
+      />
+      <PickerSheet
+        visible={picker === "gender"} title="Giới tính" options={genderOptions} value={genderDisplay}
+        onSelect={(v) => save({ gender: GENDER_VALUE[v] })} onClose={() => setPicker(null)}
+      />
+
+      {/* Multi-select sheets */}
+      <MultiSelectSheet
+        visible={multiPicker === "conditions"} title="Bệnh nền" options={CONDITION_OPTIONS}
+        selected={profile.conditions ?? []} onDone={(v) => save({ conditions: v })} onClose={() => setMultiPicker(null)}
+      />
+      <MultiSelectSheet
+        visible={multiPicker === "allergies"} title="Dị ứng" options={ALLERGY_OPTIONS}
+        selected={profile.allergies ?? []} onDone={(v) => save({ allergies: v })} onClose={() => setMultiPicker(null)}
+      />
     </ScrollView>
   );
 }

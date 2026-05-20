@@ -76,6 +76,13 @@ export default function PatientLayout() {
       />
       {/* Hidden screens kept inside the (patient) group so router knows
           they exist but they don't appear in the tab bar. */}
+      <Tabs.Screen
+        name="knowledge"
+        options={{
+          title: "Kiến thức",
+          tabBarIcon: ({ focused }) => <Icon label="K" active={focused} />,
+        }}
+      />
       <Tabs.Screen name="ai" options={{ href: null }} />
       <Tabs.Screen name="chat" options={{ href: null }} />
       <Tabs.Screen name="ocr" options={{ href: null }} />
