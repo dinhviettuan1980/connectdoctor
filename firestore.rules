@@ -1,0 +1,151 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── helpers ────────────────────────────────────────────────────────────
+
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthed() && request.auth.uid == uid;
+    }
+
+    function isPatient() {
+      return isAuthed() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "patient";
+    }
+
+    function isDoctor() {
+      return isAuthed() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "doctor";
+    }
+
+    // threadId format is always "{patientUid}_{doctorUid}"
+    function threadParticipants(threadId) {
+      let parts = threadId.split("_");
+      return parts[0] == request.auth.uid || parts[1] == request.auth.uid;
+    }
+
+    function isThreadParticipant(threadId) {
+      return isAuthed() && threadParticipants(threadId);
+    }
+
+    // Doctor has an active thread with this patient
+    function doctorHasThreadWith(patientUid) {
+      let threadId = patientUid + "_" + request.auth.uid;
+      return exists(/databases/$(database)/documents/chatThreads/$(threadId));
+    }
+
+    // ─── /users/{uid} ────────────────────────────────────────────────────────
+    // Users read their own doc; other authenticated users read display fields
+    // (needed to show names in chat lists).
+
+    match /users/{uid} {
+      allow read: if isAuthed();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid);
+    }
+
+    // ─── /patientProfiles/{uid} ──────────────────────────────────────────────
+    // Patient: full access to own profile.
+    // Doctor: read-only if they share a chat thread with this patient.
+
+    match /patientProfiles/{uid} {
+      allow read, write: if isOwner(uid);
+      allow read: if isDoctor() && doctorHasThreadWith(uid);
+    }
+
+    // ─── /medications/{id} ───────────────────────────────────────────────────
+    // Docs carry patientUid field.
+
+    match /medications/{id} {
+      allow read, write: if isAuthed() &&
+        (request.auth.uid == resource.data.patientUid ||
+         (isDoctor() && doctorHasThreadWith(resource.data.patientUid)));
+      allow create: if isAuthed() &&
+        request.auth.uid == request.resource.data.patientUid;
+    }
+
+    // ─── /medicationSnapshots/{id} ───────────────────────────────────────────
+
+    match /medicationSnapshots/{id} {
+      allow read, write: if isAuthed() &&
+        request.auth.uid == resource.data.patientUid;
+      allow read: if isDoctor() &&
+        doctorHasThreadWith(resource.data.patientUid);
+      allow create: if isAuthed() &&
+        request.auth.uid == request.resource.data.patientUid;
+    }
+
+    // ─── /metrics/{id} ───────────────────────────────────────────────────────
+
+    match /metrics/{id} {
+      allow read, write: if isAuthed() &&
+        request.auth.uid == resource.data.patientUid;
+      allow read: if isDoctor() &&
+        doctorHasThreadWith(resource.data.patientUid);
+      allow create: if isAuthed() &&
+        request.auth.uid == request.resource.data.patientUid;
+    }
+
+    // ─── /doctorProfiles/{uid} ───────────────────────────────────────────────
+    // Any authenticated user can read doctor profiles (needed for search/AI result).
+    // Doctor can write own profile.
+
+    match /doctorProfiles/{uid} {
+      allow read: if isAuthed();
+      allow write: if isOwner(uid);
+    }
+
+    // ─── /credentials/{id} ───────────────────────────────────────────────────
+
+    match /credentials/{id} {
+      allow read, write: if isAuthed() &&
+        request.auth.uid == resource.data.doctorUid;
+      allow create: if isAuthed() &&
+        request.auth.uid == request.resource.data.doctorUid;
+    }
+
+    // ─── /chatThreads/{threadId} ─────────────────────────────────────────────
+    // threadId = "{patientUid}_{doctorUid}" — deterministic so rules can
+    // verify membership without a query.
+
+    match /chatThreads/{threadId} {
+      allow read: if isThreadParticipant(threadId);
+
+      // Either participant can create the thread
+      allow create: if isAuthed() && (
+        request.auth.uid == request.resource.data.patientUid ||
+        request.auth.uid == request.resource.data.doctorUid
+      );
+
+      // Either participant can update (lastMessage, unread counts)
+      allow update: if isThreadParticipant(threadId);
+
+      // ─── /chatThreads/{threadId}/messages/{msgId} ────────────────────────
+      // Only participants can read messages.
+      // Only the sender can create a message (fromUid must match auth uid).
+
+      match /messages/{msgId} {
+        allow read: if isThreadParticipant(threadId);
+        allow create: if isThreadParticipant(threadId) &&
+          request.auth.uid == request.resource.data.fromUid;
+        // Allow updating readAt only (mark as read)
+        allow update: if isThreadParticipant(threadId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readAt"]);
+      }
+    }
+
+    // ─── /aiSessions/{id} ────────────────────────────────────────────────────
+
+    match /aiSessions/{id} {
+      allow read, write: if isAuthed() &&
+        request.auth.uid == resource.data.patientUid;
+      allow create: if isAuthed() &&
+        request.auth.uid == request.resource.data.patientUid;
+    }
+  }
+}

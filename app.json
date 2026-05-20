@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "ConnectDoctor",
+    "slug": "connectdoctor",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "connectdoctor",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#fafaf7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.connectdoctor.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "ConnectDoctor cần truy cập camera để chụp đơn thuốc và phiếu xét nghiệm.",
+        "NSPhotoLibraryUsageDescription": "ConnectDoctor cần truy cập thư viện ảnh để nhận dạng đơn thuốc và phiếu xét nghiệm.",
+        "NSMicrophoneUsageDescription": "ConnectDoctor cần microphone cho cuộc gọi với bác sỹ."
+      }
+    },
+    "android": {
+      "package": "com.connectdoctor.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#fafaf7"
+      },
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "RECORD_AUDIO"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép ConnectDoctor sử dụng camera để chụp đơn thuốc."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép ConnectDoctor truy cập ảnh để nhận dạng đơn thuốc/phiếu xét nghiệm."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    }
+  }
+}
