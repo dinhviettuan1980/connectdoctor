@@ -139,6 +139,16 @@ service cloud.firestore {
       }
     }
 
+    // ─── /prescriptions/{id} ─────────────────────────────────────────────────
+    // Prescription photos (image URL + storage path). Patient-only access.
+
+    match /prescriptions/{id} {
+      allow read, write: if isAuthed() &&
+        request.auth.uid == resource.data.patientUid;
+      allow create: if isAuthed() &&
+        request.auth.uid == request.resource.data.patientUid;
+    }
+
     // ─── /aiSessions/{id} ────────────────────────────────────────────────────
 
     match /aiSessions/{id} {

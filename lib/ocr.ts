@@ -1,9 +1,5 @@
-// OCR helper — recognizes text from a prescription / lab report image,
-// then asks Gemini to parse it into structured fields.
-//
-// Production: use @react-native-ml-kit/text-recognition on native (offline)
-// and Google Vision API on web. This module exposes a single `extractMeds()`
-// and `extractMetrics()` regardless of platform.
+// OCR helper — currently returns mock data.
+// Gemini path kept for meds; metrics OCR will be revisited later.
 
 import type { Medication, MetricEntry } from "./types";
 
@@ -43,14 +39,11 @@ export async function extractMedsFromImage(imageUri: string): Promise<Partial<Me
   }
 }
 
-export async function extractMetricsFromImage(imageUri: string): Promise<Partial<MetricEntry>[]> {
-  if (!GEMINI_KEY) return mockMetrics();
-  // Same pattern as above with a different prompt.
+export async function extractMetricsFromImage(_imageUri: string): Promise<Partial<MetricEntry>[]> {
   return mockMetrics();
 }
 
 async function uriToBase64(uri: string): Promise<string> {
-  // On native, expo-file-system; on web, fetch+FileReader. Stubbed here.
   if (uri.startsWith("data:")) return uri.split(",")[1];
   const res = await fetch(uri);
   const blob = await res.blob();

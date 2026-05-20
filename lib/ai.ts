@@ -6,7 +6,7 @@ import type { AiQuestion } from "./types";
 
 const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 interface TriageResult {
   questions: AiQuestion[];
@@ -21,26 +21,48 @@ const SYSTEM_PROMPT = `Bạn là trợ lý y tế. Khi bệnh nhân mô tả tri
 Trả lời JSON theo schema: { questions: [{prompt, options[]}], specialties: [], conditions: [] }`;
 
 export async function startTriage(complaint: string): Promise<TriageResult> {
-  if (!GEMINI_KEY) {
-    // Fallback mock so the UI works without an API key in dev.
-    return mockTriage(complaint);
+  if (!GEMINI_KEY) return mockTriage(complaint);
+
+  // Retry once on 429 after a short delay
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
+
+    let res: Response;
+    try {
+      res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: complaint }] }],
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          generationConfig: { responseMimeType: "application/json" },
+        }),
+      });
+    } catch {
+      return mockTriage(complaint);
+    }
+
+    if (res.status === 429 && attempt === 0) continue;
+    if (!res.ok) return mockTriage(complaint);
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    try {
+      const parsed = JSON.parse(text) as Partial<TriageResult>;
+      if (!Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+        return mockTriage(complaint);
+      }
+      return {
+        questions: parsed.questions,
+        specialties: parsed.specialties ?? [],
+        conditions: parsed.conditions ?? [],
+      };
+    } catch {
+      return mockTriage(complaint);
+    }
   }
-  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: complaint }] }],
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      generationConfig: { responseMimeType: "application/json" },
-    }),
-  });
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  try {
-    return JSON.parse(text) as TriageResult;
-  } catch {
-    return mockTriage(complaint);
-  }
+
+  return mockTriage(complaint);
 }
 
 function mockTriage(complaint: string): TriageResult {

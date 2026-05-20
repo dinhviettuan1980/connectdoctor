@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -18,14 +18,23 @@ export default function AiQuestionFlow() {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const called = useRef(false);
 
   useEffect(() => {
+    if (called.current) return;
+    called.current = true;
     (async () => {
-      const r = await startTriage(complaint ?? "");
-      setQuestions(r.questions);
-      setSpecialties(r.specialties);
-      setConditions(r.conditions);
-      setLoading(false);
+      try {
+        const r = await startTriage(complaint ?? "");
+        setQuestions(r.questions);
+        setSpecialties(r.specialties);
+        setConditions(r.conditions);
+      } catch {
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [complaint]);
 
@@ -34,6 +43,20 @@ export default function AiQuestionFlow() {
       <SafeAreaView className="flex-1 bg-paper items-center justify-center">
         <ActivityIndicator />
         <Text className="text-xs text-ink-3 mt-3">Trợ lý đang phân tích…</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || questions.length === 0) {
+    return (
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-8">
+        <Text className="text-base font-bold text-ink text-center">Không thể kết nối AI</Text>
+        <Text className="text-sm text-ink-3 text-center mt-2">
+          Vui lòng kiểm tra kết nối mạng và thử lại.
+        </Text>
+        <Button variant="primary" size="md" onPress={() => router.back()} block>
+          ← Quay lại
+        </Button>
       </SafeAreaView>
     );
   }

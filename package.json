@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "0.1.0",
   "scripts": {
+    "postinstall": "node scripts/patch-worklets.js",
     "start": "expo start",
     "ios": "expo start --ios",
     "android": "expo start --android",
@@ -36,6 +37,7 @@
     "react-native-screens": "~4.0.0",
     "react-native-svg": "15.8.0",
     "react-native-web": "~0.19.13",
+    "tesseract.js": "^7.0.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

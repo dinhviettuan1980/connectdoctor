@@ -1,7 +1,10 @@
-import { useState } from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  View, Text, ScrollView, Pressable,
+  Modal, Image, ActivityIndicator, Alert, useWindowDimensions,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { AppBar } from "@/components/AppBar";
 import { TopTabs } from "@/components/TopTabs";
 import { Card } from "@/components/ui/Card";
@@ -10,12 +13,19 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Section, Segmented } from "@/components/ui/Segmented";
 import { MetricChart } from "@/components/MetricChart";
-import { Avatar } from "@/components/ui/Avatar";
+import { useAuthStore } from "@/hooks/useAuth";
 import { signOut } from "@/lib/auth";
+import {
+  uploadPrescriptionImage,
+  subscribeToPrescriptions,
+  deletePrescription,
+  type PrescriptionPhoto,
+} from "@/lib/prescriptions";
+import { useRouter } from "expo-router";
 
 const TABS = [
   { key: "info", label: "Thông tin" },
-  { key: "meds", label: "Thuốc" },
+  { key: "meds", label: "Đơn thuốc" },
   { key: "metrics", label: "Chỉ số" },
 ];
 
@@ -38,11 +48,15 @@ export default function PatientProfile() {
         <TopTabs tabs={TABS} active={tab} onChange={setTab} />
       </View>
       {tab === "info" && <InfoTab />}
-      {tab === "meds" && <MedsTab onAdd={() => router.push("/(patient)/ocr/upload?kind=meds")} />}
+      {tab === "meds" && <MedsTab />}
       {tab === "metrics" && <MetricsTab onAdd={() => router.push("/(patient)/ocr/upload?kind=metrics")} />}
     </SafeAreaView>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Info tab
+// ---------------------------------------------------------------------------
 
 function InfoTab() {
   return (
@@ -88,75 +102,171 @@ function InfoTab() {
   );
 }
 
-function MedsTab({ onAdd }: { onAdd: () => void }) {
-  const [view, setView] = useState<"current" | "history">("current");
-  const meds = [
-    ["Amlodipin 5mg", "1 viên / sáng", "Huyết áp"],
-    ["Metformin 500mg", "2 viên × 2 / ngày", "Tiểu đường"],
-    ["Atorvastatin 20mg", "1 viên / tối", "Mỡ máu"],
-    ["Vitamin D3", "1 giọt / sáng", "Bổ sung"],
-    ["Aspirin 81mg", "1 viên / sáng", "Tim mạch"],
-  ];
-  const history = [
-    ["12/05/2026", "5 thuốc · sửa", true],
-    ["28/04/2026", "4 thuốc", false],
-    ["10/03/2026", "6 thuốc (OCR)", false],
-    ["02/02/2026", "3 thuốc", false],
-  ];
+// ---------------------------------------------------------------------------
+// Meds tab — prescription photo gallery
+// ---------------------------------------------------------------------------
+
+function MedsTab() {
+  const user = useAuthStore((s) => s.user);
+  const { width } = useWindowDimensions();
+  const [photos, setPhotos] = useState<PrescriptionPhoto[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [selected, setSelected] = useState<PrescriptionPhoto | null>(null);
+
+  // 3 columns: padding 16*2 + gap 8*2 = 48
+  const thumbSize = (width - 48) / 3;
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    return subscribeToPrescriptions(user.uid, setPhotos);
+  }, [user?.uid]);
+
+  const pickImage = async (fromCamera: boolean) => {
+    let result: ImagePicker.ImagePickerResult;
+    if (fromCamera) {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền camera để chụp ảnh."); return; }
+      result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+    } else {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền thư viện ảnh để chọn file."); return; }
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+    }
+    if (result.canceled || !result.assets?.[0]) return;
+    if (!user?.uid) return;
+
+    setUploading(true);
+    try {
+      await uploadPrescriptionImage(user.uid, result.assets[0].uri);
+    } catch {
+      Alert.alert("Lỗi upload", "Không thể lưu ảnh. Kiểm tra kết nối và thử lại.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const confirmDelete = (photo: PrescriptionPhoto) => {
+    Alert.alert("Xoá đơn thuốc", "Bạn có chắc muốn xoá ảnh này không?", [
+      { text: "Huỷ", style: "cancel" },
+      {
+        text: "Xoá", style: "destructive",
+        onPress: async () => {
+          setSelected(null);
+          await deletePrescription(photo.id, photo.storageKey);
+        },
+      },
+    ]);
+  };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      {/* Upload buttons */}
       <View className="flex-row gap-2">
-        <Button block leftIcon={<Text>＋</Text>}>Nhập tay</Button>
-        <Button variant="primary" block leftIcon={<Text>📷</Text>} onPress={onAdd}>
-          Từ ảnh
+        <Button block onPress={() => pickImage(false)} disabled={uploading}>
+          📁 Chọn file
+        </Button>
+        <Button variant="primary" block onPress={() => pickImage(true)} disabled={uploading}>
+          📷 Chụp ảnh
         </Button>
       </View>
 
-      <View className="flex-row items-center justify-between">
-        <Text className="text-[11px] text-ink-3">{meds.length} thuốc · bản ghi #12</Text>
-        <Segmented
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "current", label: "Mới nhất" },
-            { value: "history", label: "Lịch sử" },
-          ]}
-        />
-      </View>
+      {/* Upload progress */}
+      {uploading && (
+        <View className="flex-row items-center justify-center gap-2 py-2">
+          <ActivityIndicator size="small" />
+          <Text className="text-xs text-ink-3">Đang upload…</Text>
+        </View>
+      )}
 
-      {view === "current" && (
-        <View className="gap-1.5">
-          {meds.map(([name, dose, tag]) => (
-            <Card key={name as string} padding="md">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1">
-                  <Text className="text-xs font-bold text-ink">{name}</Text>
-                  <Text className="text-[11px] text-ink-3">{dose}</Text>
-                </View>
-                <Chip variant="soft">{tag}</Chip>
-              </View>
-            </Card>
+      {/* Thumbnail grid */}
+      {photos.length === 0 && !uploading ? (
+        <View className="items-center py-16 gap-1">
+          <Text className="text-sm text-ink-3">Chưa có đơn thuốc nào</Text>
+          <Text className="text-[11px] text-ink-4">Chụp hoặc chọn ảnh đơn thuốc để lưu</Text>
+        </View>
+      ) : (
+        <View className="flex-row flex-wrap gap-2">
+          {photos.map((photo) => (
+            <View key={photo.id} style={{ width: thumbSize }}>
+              <Pressable onPress={() => setSelected(photo)}>
+                <Image
+                  source={{ uri: photo.imageUrl }}
+                  style={{ width: thumbSize, height: thumbSize * 1.35, borderRadius: 8, backgroundColor: "#f1f0ea" }}
+                  resizeMode="cover"
+                />
+              </Pressable>
+              {/* Delete button — top-right corner */}
+              <Pressable
+                onPress={() => deletePrescription(photo.id, photo.storageKey)}
+                style={{
+                  position: "absolute", top: 4, right: 4,
+                  width: 20, height: 20, borderRadius: 10,
+                  backgroundColor: "rgba(0,0,0,0.55)",
+                  alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 11, lineHeight: 12 }}>✕</Text>
+              </Pressable>
+              <Text className="font-mono text-[10px] text-ink-3 mt-0.5">
+                {new Date(photo.createdAt).toLocaleDateString("vi-VN")}
+              </Text>
+            </View>
           ))}
         </View>
       )}
 
-      {view === "history" && (
-        <View className="gap-1.5">
-          {history.map(([d, c, cur]) => (
-            <Card key={d as string} padding="sm">
-              <View className="flex-row items-center justify-between">
-                <Text className="font-mono text-[11px] font-bold text-ink">{d as string}</Text>
-                <Text className="text-[11px] text-ink-2">{c as string}</Text>
-                {cur ? <Chip variant="accent">hiện tại</Chip> : <Text className="text-xs text-ink-3">›</Text>}
-              </View>
-            </Card>
-          ))}
+      {/* Fullscreen modal */}
+      <Modal
+        visible={!!selected}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelected(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.93)" }}>
+          {/* Top bar */}
+          <View
+            style={{
+              position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
+              flexDirection: "row", justifyContent: "space-between",
+              alignItems: "center", paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12,
+            }}
+          >
+            <Pressable
+              onPress={() => selected && confirmDelete(selected)}
+              style={{ padding: 8 }}
+            >
+              <Text style={{ color: "#ff6b6b", fontSize: 13 }}>Xoá</Text>
+            </Pressable>
+            <Pressable onPress={() => setSelected(null)} style={{ padding: 8 }}>
+              <Text style={{ color: "#fff", fontSize: 22, lineHeight: 24 }}>✕</Text>
+            </Pressable>
+          </View>
+
+          {/* Full image */}
+          {selected && (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 100 }}>
+              <Image
+                source={{ uri: selected.imageUrl }}
+                style={{ width: "95%", height: "78%" }}
+                resizeMode="contain"
+              />
+              <Text style={{ color: "#888", fontSize: 11, marginTop: 10, fontFamily: "monospace" }}>
+                {new Date(selected.createdAt).toLocaleString("vi-VN")}
+              </Text>
+            </View>
+          )}
         </View>
-      )}
+      </Modal>
     </ScrollView>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Metrics tab
+// ---------------------------------------------------------------------------
 
 function MetricsTab({ onAdd }: { onAdd: () => void }) {
   const [chart, setChart] = useState(true);
