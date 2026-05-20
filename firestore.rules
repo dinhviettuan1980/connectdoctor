@@ -18,6 +18,11 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "doctor";
     }
 
+    function isAdmin() {
+      return isAuthed() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
     // Doctor has an active thread with this patient
     function doctorHasThreadWith(patientUid) {
       let threadId = patientUid + "_" + request.auth.uid;
@@ -140,6 +145,14 @@ service cloud.firestore {
           (threadId.split("_")[0] == request.auth.uid || threadId.split("_")[1] == request.auth.uid) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readAt"]);
       }
+    }
+
+    // ─── /knowledgeTracks/{id} ───────────────────────────────────────────────
+    // All authenticated users can read; only admin can write/delete.
+
+    match /knowledgeTracks/{id} {
+      allow read: if isAuthed();
+      allow create, update, delete: if isAdmin();
     }
 
     // ─── /prescriptions/{id} ─────────────────────────────────────────────────

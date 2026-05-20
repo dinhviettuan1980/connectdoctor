@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, Alert } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Input } from "@/components/ui/Input";
@@ -13,13 +13,16 @@ export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const doSignIn = async () => {
+    setError("");
     setLoading(true);
+    const resolvedEmail = email.includes("@") ? email : `${email}@connectdoctor.app`;
     try {
-      await signInWithEmail(email, password);
+      await signInWithEmail(resolvedEmail, password);
     } catch (e: any) {
-      Alert.alert("Đăng nhập thất bại", e?.message ?? "Sai email/mật khẩu.");
+      setError(e?.message ?? "Sai email hoặc mật khẩu.");
     } finally {
       setLoading(false);
     }
@@ -46,6 +49,10 @@ export default function SignIn() {
           secureTextEntry
         />
 
+        {error ? (
+          <Text className="text-sm text-danger text-center">{error}</Text>
+        ) : null}
+
         <Button variant="primary" block loading={loading} onPress={doSignIn}>
           Đăng nhập
         </Button>
@@ -56,10 +63,10 @@ export default function SignIn() {
           <View className="flex-1"><Divider /></View>
         </View>
 
-        <Button block onPress={() => signInWithGoogle().catch((e) => Alert.alert("Lỗi", e.message))}>
+        <Button block onPress={() => signInWithGoogle().catch((e) => setError(e.message))}>
           Tiếp tục với Google
         </Button>
-        <Button block onPress={() => signInWithFacebook().catch((e) => Alert.alert("Lỗi", e.message))}>
+        <Button block onPress={() => signInWithFacebook().catch((e) => setError(e.message))}>
           Tiếp tục với Facebook
         </Button>
 

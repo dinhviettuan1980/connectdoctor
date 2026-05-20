@@ -2,6 +2,7 @@ import { View, Text, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppBar } from "@/components/AppBar";
 import { Card } from "@/components/ui/Card";
+import { UserMenu } from "@/components/UserMenu";
 import { Avatar } from "@/components/ui/Avatar";
 import { Chip } from "@/components/ui/Chip";
 import { Section } from "@/components/ui/Segmented";
@@ -15,7 +16,7 @@ export default function DoctorHome() {
         <AppBar
           title={`BS. ${user?.displayName?.split(" ").slice(-1)[0] ?? ""}`}
           subtitle="Tổng quan hôm nay"
-          right={<Avatar label={user?.displayName ?? "BS"} />}
+          right={<UserMenu />}
         />
 
         <View className="flex-row gap-2">

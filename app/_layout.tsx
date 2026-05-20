@@ -26,13 +26,15 @@ function AuthGate() {
     const inDoctor = segments[0] === "(doctor)";
 
     if (!user && !inAuthGroup) {
-      router.replace("/(auth)/role-select");
+      router.replace("/(auth)/sign-in");
     } else if (user) {
+      const isAdmin = user.role === "admin";
+      const isDoctor = user.role === "doctor";
       if (inAuthGroup) {
-        router.replace(user.role === "doctor" ? "/(doctor)/home" : "/(patient)/home");
-      } else if (user.role === "doctor" && inPatient) {
+        router.replace(isDoctor ? "/(doctor)/home" : "/(patient)/home");
+      } else if (isDoctor && inPatient) {
         router.replace("/(doctor)/home");
-      } else if (user.role === "patient" && inDoctor) {
+      } else if ((user.role === "patient" || isAdmin) && inDoctor) {
         router.replace("/(patient)/home");
       }
     }
