@@ -1,5 +1,8 @@
+import { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Text, View } from "react-native";
+import { useAuthStore } from "@/hooks/useAuth";
+import { subscribeToThreads } from "@/lib/chat";
 
 function Icon({ label, active }: { label: string; active: boolean }) {
   return (
@@ -17,6 +20,16 @@ function Icon({ label, active }: { label: string; active: boolean }) {
 }
 
 export default function PatientLayout() {
+  const user = useAuthStore((s) => s.user);
+  const [totalUnread, setTotalUnread] = useState(0);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    return subscribeToThreads(user.uid, "patient", (threads) => {
+      setTotalUnread(threads.reduce((s, t) => s + (t.unreadForPatient ?? 0), 0));
+    });
+  }, [user?.uid]);
+
   return (
     <Tabs
       screenOptions={{
@@ -43,6 +56,8 @@ export default function PatientLayout() {
         options={{
           title: "Tin nhắn",
           tabBarIcon: ({ focused }) => <Icon label="C" active={focused} />,
+          tabBarBadge: totalUnread > 0 ? totalUnread : undefined,
+          tabBarBadgeStyle: { backgroundColor: "#c3604a", fontSize: 9, minWidth: 16, height: 16 },
         }}
       />
       <Tabs.Screen

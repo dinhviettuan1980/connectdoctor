@@ -32,22 +32,27 @@ export default function Messages() {
               key={t.id}
               onPress={() => router.push(`/(patient)/chat/${t.doctorUid}`)}
             >
-              <Card padding="md">
+              <Card padding="md" variant={unreadCount(t) > 0 ? "soft" : "default"}>
                 <View className="flex-row items-center gap-3">
                   <Avatar label={t.otherName} />
                   <View className="flex-1">
-                    <View className="flex-row justify-between">
-                      <Text className="text-xs font-bold text-ink">{t.otherName}</Text>
+                    <View className="flex-row justify-between items-center">
+                      <Text className={["text-xs text-ink", unreadCount(t) > 0 ? "font-bold" : ""].join(" ")}>
+                        {t.otherName}
+                      </Text>
                       <Text className="text-[10px] text-ink-3">
                         {t.lastMessageAt ? formatRelativeTime(t.lastMessageAt) : ""}
                       </Text>
                     </View>
-                    <Text className="text-[11px] text-ink-3 mt-0.5" numberOfLines={1}>
+                    <Text
+                      className={["text-[11px] mt-0.5 numberOfLines-1", unreadCount(t) > 0 ? "text-ink font-bold" : "text-ink-3"].join(" ")}
+                      numberOfLines={1}
+                    >
                       {t.lastMessage ?? ""}
                     </Text>
                   </View>
                   {unreadCount(t) > 0 && (
-                    <View className="bg-accent-ink rounded-full w-5 h-5 items-center justify-center">
+                    <View className="bg-danger rounded-full min-w-[18px] h-[18px] px-1 items-center justify-center">
                       <Text className="text-[10px] font-bold text-paper">{unreadCount(t)}</Text>
                     </View>
                   )}

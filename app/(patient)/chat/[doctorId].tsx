@@ -44,6 +44,7 @@ export default function ChatThread() {
   useEffect(() => {
     if (!user || !doctorId) return;
     let msgUnsub: (() => void) | undefined;
+    let readTimer: ReturnType<typeof setTimeout> | undefined;
 
     getOrCreateThread(user.uid, doctorId, {
       patientName: user.displayName ?? "Bệnh nhân",
@@ -54,10 +55,14 @@ export default function ChatThread() {
         setMessages(msgs);
         setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
       });
-      markThreadRead(tid, "patient").catch(() => {});
+      // Mark as read after 3 s on screen (matches user expectation of "dừng lại")
+      readTimer = setTimeout(() => markThreadRead(tid, "patient").catch(() => {}), 3000);
     });
 
-    return () => msgUnsub?.();
+    return () => {
+      msgUnsub?.();
+      clearTimeout(readTimer);
+    };
   }, [user?.uid, doctorId]);
 
   const send = async () => {
