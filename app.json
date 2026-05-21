@@ -20,7 +20,8 @@
         "NSCameraUsageDescription": "ConnectDoctor cần truy cập camera để chụp đơn thuốc và phiếu xét nghiệm.",
         "NSPhotoLibraryUsageDescription": "ConnectDoctor cần truy cập thư viện ảnh để nhận dạng đơn thuốc và phiếu xét nghiệm.",
         "NSMicrophoneUsageDescription": "ConnectDoctor cần microphone cho cuộc gọi với bác sỹ."
-      }
+      },
+      "appleTeamId": "GXSFH7K2X5"
     },
     "android": {
       "package": "com.connectdoctor.app",
@@ -28,7 +29,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#fafaf7"
       },
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -53,6 +59,14 @@
     "experiments": {
       "typedRoutes": true,
       "tsconfigPaths": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "c5dfd745-4e03-4440-b53f-2cc7f08e4e17"
+      }
     }
   }
 }

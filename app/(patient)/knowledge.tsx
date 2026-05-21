@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  View, Text, ScrollView, Pressable, ActivityIndicator,
+  View, Text, ScrollView, Pressable, ActivityIndicator, GestureResponderEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
@@ -58,6 +58,8 @@ export default function Knowledge() {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const barRef = useRef<View>(null);
+  const barWidthRef = useRef(1);
 
   const filtered = cat === "Tất cả" ? TRACKS : TRACKS.filter((t) => t.category === cat);
 
@@ -120,6 +122,23 @@ export default function Knowledge() {
       const idx = TRACKS.indexOf(currentTrack);
       if (idx > 0) playTrack(TRACKS[idx - 1]);
     }
+  };
+
+  const seekBy = (deltaMs: number) => {
+    if (!soundRef.current || duration === 0) return;
+    const next = Math.max(0, Math.min(duration, position + deltaMs));
+    soundRef.current.setPositionAsync(next);
+  };
+
+  const seekToTap = (e: GestureResponderEvent) => {
+    if (!soundRef.current || duration === 0) return;
+    const pageX = e.nativeEvent.pageX;
+    barRef.current?.measure((_x, _y, width, _h, barPageX) => {
+      const localX = pageX - barPageX;
+      if (!Number.isFinite(localX) || width <= 0) return;
+      const pct = Math.max(0, Math.min(1, localX / width));
+      soundRef.current?.setPositionAsync(pct * duration);
+    });
   };
 
   useEffect(() => () => { soundRef.current?.unloadAsync(); }, []);
@@ -212,18 +231,32 @@ export default function Knowledge() {
           className="absolute bottom-0 left-0 right-0 bg-paper border-t border-line"
           style={{ paddingBottom: 18 }}
         >
-          {/* Progress bar */}
-          <View style={{ height: 3, backgroundColor: "#f1f0ea" }}>
+          {/* Seekable progress bar */}
+          <Pressable
+            ref={barRef}
+            onLayout={(e) => { barWidthRef.current = e.nativeEvent.layout.width; }}
+            onPress={seekToTap}
+            style={{ height: 20, justifyContent: "center", paddingHorizontal: 0 }}
+          >
+            <View style={{ height: 3, backgroundColor: "#f1f0ea", marginHorizontal: 0 }}>
+              <View style={{ height: 3, backgroundColor: "#5eb594", width: `${(progress * 100).toFixed(1)}%` }} />
+            </View>
+            {/* Thumb */}
             <View
               style={{
-                height: 3,
+                position: "absolute",
+                left: `${(progress * 100).toFixed(1)}%` as any,
+                width: 12,
+                height: 12,
+                borderRadius: 6,
                 backgroundColor: "#5eb594",
-                width: `${(progress * 100).toFixed(1)}%`,
+                marginLeft: -6,
+                top: 4,
               }}
             />
-          </View>
+          </Pressable>
 
-          <View className="flex-row items-center px-4 pt-3 gap-3">
+          <View className="flex-row items-center px-4 pt-1 gap-3">
             {/* Track info */}
             <View className="flex-1">
               <Text className="text-xs font-bold text-ink" numberOfLines={1}>
@@ -235,9 +268,12 @@ export default function Knowledge() {
             </View>
 
             {/* Controls */}
-            <View className="flex-row items-center gap-5">
+            <View className="flex-row items-center gap-4">
               <Pressable onPress={skipPrev} hitSlop={10}>
                 <Text className="text-xl text-ink-2">⏮</Text>
+              </Pressable>
+              <Pressable onPress={() => seekBy(-15000)} hitSlop={10}>
+                <Text className="text-sm font-bold text-ink-2">-15</Text>
               </Pressable>
               <Pressable
                 onPress={togglePlay}
@@ -250,6 +286,9 @@ export default function Knowledge() {
                     {playing ? "⏸" : "▶"}
                   </Text>
                 )}
+              </Pressable>
+              <Pressable onPress={() => seekBy(15000)} hitSlop={10}>
+                <Text className="text-sm font-bold text-ink-2">+15</Text>
               </Pressable>
               <Pressable onPress={skipNext} hitSlop={10}>
                 <Text className="text-xl text-ink-2">⏭</Text>

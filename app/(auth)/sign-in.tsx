@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { AppBar } from "@/components/AppBar";
 import { Divider } from "@/components/ui/Segmented";
-import { signInWithEmail, signInWithGoogle, signInWithFacebook } from "@/lib/auth";
+import { signInWithEmail, signInWithFacebook, loadOrInitUserDoc } from "@/lib/auth";
+import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 
 export default function SignIn() {
   const router = useRouter();
@@ -14,6 +15,11 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const { signIn: googleSignIn } = useGoogleSignIn(
+    async (fbUser) => { await loadOrInitUserDoc(fbUser); },
+    (e) => setError(e.message),
+  );
 
   const doSignIn = async () => {
     setError("");
@@ -63,11 +69,8 @@ export default function SignIn() {
           <View className="flex-1"><Divider /></View>
         </View>
 
-        <Button block onPress={() => signInWithGoogle().catch((e) => setError(e.message))}>
+        <Button block onPress={googleSignIn}>
           Tiếp tục với Google
-        </Button>
-        <Button block onPress={() => signInWithFacebook().catch((e) => setError(e.message))}>
-          Tiếp tục với Facebook
         </Button>
 
         <Text

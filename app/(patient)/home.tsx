@@ -5,9 +5,10 @@ import { useState } from "react";
 import { AppBar } from "@/components/AppBar";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
-import { Avatar } from "@/components/ui/Avatar";
 import { Section } from "@/components/ui/Segmented";
 import { useAuthStore } from "@/hooks/useAuth";
+import { UserMenu } from "@/components/UserMenu";
+import { Avatar } from "@/components/ui/Avatar";
 
 const SUGGESTIONS = ["Đau đầu", "Mất ngủ", "Đau bụng", "Sốt", "Ho kéo dài"];
 
@@ -28,7 +29,7 @@ export default function PatientHome() {
         <AppBar
           title={`Chào ${user?.displayName?.split(" ").slice(-1)[0] ?? "bạn"}`}
           subtitle="Hôm nay bạn thấy thế nào?"
-          right={<Avatar label={user?.displayName ?? "?"} />}
+          right={<UserMenu />}
         />
 
         <Card variant="accent" padding="lg">

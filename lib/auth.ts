@@ -70,7 +70,7 @@ async function upsertUserDoc(
   return user;
 }
 
-async function loadOrInitUserDoc(fbUser: FbUser, defaultRole: Role = "patient"): Promise<AppUser> {
+export async function loadOrInitUserDoc(fbUser: FbUser, defaultRole: Role = "patient"): Promise<AppUser> {
   const ref = doc(db, "users", fbUser.uid);
   const snap = await getDoc(ref);
   if (snap.exists()) return snap.data() as AppUser;

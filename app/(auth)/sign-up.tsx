@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, Alert } from "react-native";
+import { View, Text, ScrollView, Alert, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Input } from "@/components/ui/Input";
@@ -8,7 +8,8 @@ import { AppBar } from "@/components/AppBar";
 import { Divider } from "@/components/ui/Segmented";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
-import { signUpWithEmail, signInWithGoogle, signInWithFacebook } from "@/lib/auth";
+import { signUpWithEmail, loadOrInitUserDoc } from "@/lib/auth";
+import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { useAuthStore } from "@/hooks/useAuth";
 
 export default function SignUp() {
@@ -31,13 +32,10 @@ export default function SignUp() {
     }
   };
 
-  const social = async (fn: () => Promise<unknown>) => {
-    try {
-      await fn();
-    } catch (e: any) {
-      Alert.alert("Lỗi", e?.message ?? "Không thể đăng nhập.");
-    }
-  };
+  const { signIn: googleSignIn } = useGoogleSignIn(
+    async (fbUser) => { await loadOrInitUserDoc(fbUser, pendingRole); },
+    (e) => Alert.alert("Lỗi", e.message),
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-paper">
@@ -78,11 +76,8 @@ export default function SignUp() {
           <View className="flex-1"><Divider /></View>
         </View>
 
-        <Button block onPress={() => social(() => signInWithGoogle(pendingRole))}>
+        <Button block onPress={googleSignIn}>
           Tiếp tục với Google
-        </Button>
-        <Button block onPress={() => social(() => signInWithFacebook(pendingRole))}>
-          Tiếp tục với Facebook
         </Button>
 
         <Text
