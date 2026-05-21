@@ -1,0 +1,17 @@
+name: Deploy ConnectDoctor
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 3.27.76.114
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: /home/ubuntu/deploy-connectdoctor.sh
