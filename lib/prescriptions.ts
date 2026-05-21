@@ -4,7 +4,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
-const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "http://localhost:3001";
+const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
 
 // ---------------------------------------------------------------------------
 // Types

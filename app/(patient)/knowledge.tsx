@@ -7,7 +7,7 @@ import { Audio } from "expo-av";
 import { AppBar } from "@/components/AppBar";
 import { Chip } from "@/components/ui/Chip";
 
-const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "http://localhost:3001";
+const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
 
 type Track = {
   file: string;
