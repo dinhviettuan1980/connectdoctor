@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { AppBar } from "@/components/AppBar";
 import { Divider } from "@/components/ui/Segmented";
-import { signInWithEmail, signInWithFacebook, loadOrInitUserDoc } from "@/lib/auth";
+import { signInWithEmail, loadOrInitUserDoc } from "@/lib/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
+import { useFacebookSignIn } from "@/hooks/useFacebookSignIn";
 
 export default function SignIn() {
   const router = useRouter();
@@ -17,6 +18,11 @@ export default function SignIn() {
   const [error, setError] = useState("");
 
   const { signIn: googleSignIn } = useGoogleSignIn(
+    async (fbUser) => { await loadOrInitUserDoc(fbUser); },
+    (e) => setError(e.message),
+  );
+
+  const { signIn: facebookSignIn } = useFacebookSignIn(
     async (fbUser) => { await loadOrInitUserDoc(fbUser); },
     (e) => setError(e.message),
   );
@@ -71,6 +77,10 @@ export default function SignIn() {
 
         <Button block onPress={googleSignIn}>
           Tiếp tục với Google
+        </Button>
+
+        <Button block onPress={facebookSignIn}>
+          Tiếp tục với Facebook
         </Button>
 
         <Text

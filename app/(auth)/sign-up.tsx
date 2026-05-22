@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { signUpWithEmail, loadOrInitUserDoc } from "@/lib/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
+import { useFacebookSignIn } from "@/hooks/useFacebookSignIn";
 import { useAuthStore } from "@/hooks/useAuth";
 
 export default function SignUp() {
@@ -33,6 +34,11 @@ export default function SignUp() {
   };
 
   const { signIn: googleSignIn } = useGoogleSignIn(
+    async (fbUser) => { await loadOrInitUserDoc(fbUser, pendingRole); },
+    (e) => Alert.alert("Lỗi", e.message),
+  );
+
+  const { signIn: facebookSignIn } = useFacebookSignIn(
     async (fbUser) => { await loadOrInitUserDoc(fbUser, pendingRole); },
     (e) => Alert.alert("Lỗi", e.message),
   );
@@ -78,6 +84,10 @@ export default function SignUp() {
 
         <Button block onPress={googleSignIn}>
           Tiếp tục với Google
+        </Button>
+
+        <Button block onPress={facebookSignIn}>
+          Tiếp tục với Facebook
         </Button>
 
         <Text
