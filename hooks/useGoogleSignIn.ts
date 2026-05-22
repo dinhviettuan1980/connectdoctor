@@ -13,8 +13,12 @@ export function useGoogleSignIn(
   onSuccess: (user: import("firebase/auth").User) => void,
   onError: (err: Error) => void,
 ) {
+  // On web we use signInWithPopup so webClientId is unused, but the hook
+  // requires a truthy value regardless of platform — pass a fallback.
   const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    webClientId:
+      process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ??
+      (Platform.OS === "web" ? "web-popup-mode" : undefined),
   });
 
   useEffect(() => {
