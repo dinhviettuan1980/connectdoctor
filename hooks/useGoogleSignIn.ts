@@ -9,16 +9,26 @@ if (Platform.OS !== "web") {
   WebBrowser.maybeCompleteAuthSession();
 }
 
+// expo-auth-session validates the platform-specific clientId synchronously in useMemo:
+//   iOS  → checks iosClientId
+//   web  → checks webClientId
+//   Android → checks androidClientId
+// Passing a non-empty fallback prevents the invariant throw when the env var is absent.
+const WEB_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ??
+  (Platform.OS === "web" ? "web-popup-mode" : undefined);
+
+const IOS_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ??
+  (Platform.OS === "ios" ? "ios-not-configured" : undefined);
+
 export function useGoogleSignIn(
   onSuccess: (user: import("firebase/auth").User) => void,
   onError: (err: Error) => void,
 ) {
-  // On web we use signInWithPopup so webClientId is unused, but the hook
-  // requires a truthy value regardless of platform — pass a fallback.
   const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId:
-      process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ??
-      (Platform.OS === "web" ? "web-popup-mode" : undefined),
+    webClientId: WEB_CLIENT_ID,
+    iosClientId: IOS_CLIENT_ID,
   });
 
   useEffect(() => {
@@ -43,6 +53,10 @@ export function useGoogleSignIn(
         onError(e as Error);
       }
     } else {
+      if (!process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) {
+        onError(new Error("Google Sign-In chưa được cấu hình cho iOS. Vui lòng dùng Email để đăng nhập."));
+        return;
+      }
       await promptAsync();
     }
   };
