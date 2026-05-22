@@ -53,10 +53,6 @@ export function useGoogleSignIn(
         onError(e as Error);
       }
     } else {
-      if (!process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) {
-        onError(new Error("Google Sign-In chưa được cấu hình cho iOS. Vui lòng dùng Email để đăng nhập."));
-        return;
-      }
       await promptAsync();
     }
   };
