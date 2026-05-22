@@ -4,6 +4,7 @@ import * as Facebook from "expo-auth-session/providers/facebook";
 import * as WebBrowser from "expo-web-browser";
 import { FacebookAuthProvider, signInWithCredential, signInWithPopup } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { setPendingCredential } from "@/lib/pendingCredential";
 
 if (Platform.OS !== "web") {
   WebBrowser.maybeCompleteAuthSession();
@@ -26,7 +27,18 @@ export function useFacebookSignIn(
       const credential = FacebookAuthProvider.credential(accessToken);
       signInWithCredential(auth, credential)
         .then((cred) => onSuccess(cred.user))
-        .catch(onError);
+        .catch((e) => {
+          if (e.code === "auth/account-exists-with-different-credential") {
+            // Store the Facebook credential so Google sign-in can link it
+            const pendingCred = FacebookAuthProvider.credentialFromError(e);
+            if (pendingCred) setPendingCredential(pendingCred);
+            onError(new Error(
+              "Email này đã đăng ký bằng Google. Bấm 'Tiếp tục với Google' để đăng nhập — Facebook sẽ tự động được liên kết."
+            ));
+          } else {
+            onError(e);
+          }
+        });
     } else if (response?.type === "error") {
       onError(new Error(response.error?.message ?? "Facebook Sign-In thất bại."));
     }
@@ -37,8 +49,16 @@ export function useFacebookSignIn(
       try {
         const cred = await signInWithPopup(auth, new FacebookAuthProvider());
         onSuccess(cred.user);
-      } catch (e) {
-        onError(e as Error);
+      } catch (e: any) {
+        if (e.code === "auth/account-exists-with-different-credential") {
+          const pendingCred = FacebookAuthProvider.credentialFromError(e);
+          if (pendingCred) setPendingCredential(pendingCred);
+          onError(new Error(
+            "Email này đã đăng ký bằng Google. Bấm 'Tiếp tục với Google' để đăng nhập — Facebook sẽ tự động được liên kết."
+          ));
+        } else {
+          onError(e as Error);
+        }
       }
     } else {
       await promptAsync();

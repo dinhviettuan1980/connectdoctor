@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
-import { GoogleAuthProvider, signInWithCredential, signInWithPopup } from "firebase/auth";
+import { GoogleAuthProvider, linkWithCredential, signInWithCredential, signInWithPopup } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { consumePendingCredential } from "@/lib/pendingCredential";
 
 if (Platform.OS !== "web") {
   WebBrowser.maybeCompleteAuthSession();
@@ -12,7 +13,6 @@ if (Platform.OS !== "web") {
 // expo-auth-session validates the platform-specific clientId synchronously in useMemo:
 //   iOS  → checks iosClientId
 //   web  → checks webClientId
-//   Android → checks androidClientId
 // Passing a non-empty fallback prevents the invariant throw when the env var is absent.
 const WEB_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ??
@@ -21,6 +21,21 @@ const WEB_CLIENT_ID =
 const IOS_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ??
   (Platform.OS === "ios" ? "ios-not-configured" : undefined);
+
+async function linkPendingAndNotify(
+  googleUser: import("firebase/auth").User,
+  onSuccess: (user: import("firebase/auth").User) => void,
+) {
+  const pending = consumePendingCredential();
+  if (pending) {
+    try {
+      await linkWithCredential(googleUser, pending);
+    } catch {
+      // Already linked or other non-fatal error — proceed anyway
+    }
+  }
+  onSuccess(googleUser);
+}
 
 export function useGoogleSignIn(
   onSuccess: (user: import("firebase/auth").User) => void,
@@ -37,7 +52,7 @@ export function useGoogleSignIn(
       if (!idToken) { onError(new Error("Không nhận được ID token từ Google.")); return; }
       const credential = GoogleAuthProvider.credential(idToken);
       signInWithCredential(auth, credential)
-        .then((cred) => onSuccess(cred.user))
+        .then((cred) => linkPendingAndNotify(cred.user, onSuccess))
         .catch(onError);
     } else if (response?.type === "error") {
       onError(new Error(response.error?.message ?? "Google Sign-In thất bại."));
@@ -48,7 +63,7 @@ export function useGoogleSignIn(
     if (Platform.OS === "web") {
       try {
         const cred = await signInWithPopup(auth, new GoogleAuthProvider());
-        onSuccess(cred.user);
+        await linkPendingAndNotify(cred.user, onSuccess);
       } catch (e) {
         onError(e as Error);
       }
