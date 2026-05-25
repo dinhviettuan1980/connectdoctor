@@ -17,9 +17,16 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 async function uploadAvatar(uri: string, uid: string): Promise<string> {
-  const ext = uri.split(".").pop()?.split("?")[0] ?? "jpg";
   const formData = new FormData();
-  formData.append("file", { uri, name: `avatar_${uid}.${ext}`, type: `image/${ext}` } as any);
+  if (Platform.OS === "web") {
+    // On web, ImagePicker returns a blob: URL — fetch it to get the actual Blob
+    const blob = await fetch(uri).then((r) => r.blob());
+    const ext = blob.type.split("/")[1] ?? "jpg";
+    formData.append("file", blob, `avatar_${uid}.${ext}`);
+  } else {
+    const ext = uri.split(".").pop()?.split("?")[0] ?? "jpg";
+    formData.append("file", { uri, name: `avatar_${uid}.${ext}`, type: `image/${ext}` } as any);
+  }
   const res = await fetch(`${STORAGE_URL}/upload`, { method: "POST", body: formData });
   if (!res.ok) throw new Error("Upload failed");
   const json = await res.json();
@@ -41,7 +48,10 @@ export function UserMenu() {
     setLocalUri(null);
   }, [user?.photoURL]);
 
-  const avatarUri = localUri ?? user?.photoURL ?? undefined;
+  const storedUri = user?.photoURL?.startsWith("file://") && Platform.OS === "web"
+    ? undefined
+    : user?.photoURL ?? undefined;
+  const avatarUri = localUri ?? storedUri;
 
   const close = () => { setVisible(false); setConfirming(false); setPickingPhoto(false); };
 
