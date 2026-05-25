@@ -1,20 +1,5 @@
 import { Tabs } from "expo-router";
-import { Text, View } from "react-native";
-
-function Icon({ label, active }: { label: string; active: boolean }) {
-  return (
-    <View
-      className={[
-        "w-5 h-5 border rounded-md items-center justify-center",
-        active ? "border-ink bg-accent-soft" : "border-ink-3",
-      ].join(" ")}
-    >
-      <Text className={["text-[8px] font-bold", active ? "text-ink" : "text-ink-3"].join(" ")}>
-        {label}
-      </Text>
-    </View>
-  );
-}
+import { Ionicons } from "@expo/vector-icons";
 
 export default function DoctorLayout() {
   return (
@@ -31,10 +16,43 @@ export default function DoctorLayout() {
         tabBarInactiveTintColor: "#767676",
       }}
     >
-      <Tabs.Screen name="home" options={{ title: "Trang chủ", tabBarIcon: ({ focused }) => <Icon label="H" active={focused} /> }} />
-      <Tabs.Screen name="patients" options={{ title: "Bệnh nhân", tabBarIcon: ({ focused }) => <Icon label="B" active={focused} /> }} />
-      <Tabs.Screen name="messages" options={{ title: "Tin nhắn", tabBarIcon: ({ focused }) => <Icon label="C" active={focused} /> }} />
-      <Tabs.Screen name="profile" options={{ title: "Hồ sơ", tabBarIcon: ({ focused }) => <Icon label="P" active={focused} /> }} />
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: "Trang chủ",
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="patients"
+        options={{
+          title: "Bệnh nhân",
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "people" : "people-outline"} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: "Tin nhắn",
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Hồ sơ",
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen name="chat" options={{ href: null }} />
     </Tabs>
   );
 }

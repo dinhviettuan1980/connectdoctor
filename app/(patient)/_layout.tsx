@@ -1,23 +1,8 @@
 import { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
-import { Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/hooks/useAuth";
 import { subscribeToThreads } from "@/lib/chat";
-
-function Icon({ label, active }: { label: string; active: boolean }) {
-  return (
-    <View
-      className={[
-        "w-5 h-5 border rounded-md items-center justify-center",
-        active ? "border-ink bg-accent-soft" : "border-ink-3",
-      ].join(" ")}
-    >
-      <Text className={["text-[8px] font-bold", active ? "text-ink" : "text-ink-3"].join(" ")}>
-        {label}
-      </Text>
-    </View>
-  );
-}
 
 export default function PatientLayout() {
   const user = useAuthStore((s) => s.user);
@@ -48,14 +33,18 @@ export default function PatientLayout() {
         name="home"
         options={{
           title: "Trang chủ",
-          tabBarIcon: ({ focused }) => <Icon label="H" active={focused} />,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
           title: "Tin nhắn",
-          tabBarIcon: ({ focused }) => <Icon label="C" active={focused} />,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"} size={22} color={color} />
+          ),
           tabBarBadge: totalUnread > 0 ? totalUnread : undefined,
           tabBarBadgeStyle: { backgroundColor: "#c3604a", fontSize: 9, minWidth: 16, height: 16 },
         }}
@@ -64,14 +53,18 @@ export default function PatientLayout() {
         name="history"
         options={{
           title: "Lịch sử",
-          tabBarIcon: ({ focused }) => <Icon label="L" active={focused} />,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "time" : "time-outline"} size={22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "Hồ sơ",
-          tabBarIcon: ({ focused }) => <Icon label="P" active={focused} />,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
+          ),
         }}
       />
       {/* Hidden screens kept inside the (patient) group so router knows
@@ -80,7 +73,9 @@ export default function PatientLayout() {
         name="knowledge"
         options={{
           title: "Kiến thức",
-          tabBarIcon: ({ focused }) => <Icon label="K" active={focused} />,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "book" : "book-outline"} size={22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen name="ai" options={{ href: null }} />
