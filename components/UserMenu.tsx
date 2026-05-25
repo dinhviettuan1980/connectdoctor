@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useAuthStore } from "@/hooks/useAuth";
 import { signOut } from "@/lib/auth";
+import { WebPortal } from "@/components/WebPortal";
 
 const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
 
@@ -173,9 +174,10 @@ export function UserMenu() {
         <Avatar label={user.displayName ?? "?"} uri={user.photoURL ?? undefined} size="md" />
       </Pressable>
 
-      {/* Web: use fixed-position overlay — Modal's flex:1 backdrop is unreliable on web */}
+      {/* Web: portal to document.body so position:fixed isn't confined by
+          Expo Router's transform ancestors (which would break fixed positioning) */}
       {Platform.OS === "web" && visible && (
-        <>
+        <WebPortal>
           <Pressable
             onPress={close}
             style={{
@@ -193,7 +195,7 @@ export function UserMenu() {
           }}>
             {menuCard}
           </View>
-        </>
+        </WebPortal>
       )}
 
       {/* Native: Modal works correctly */}
