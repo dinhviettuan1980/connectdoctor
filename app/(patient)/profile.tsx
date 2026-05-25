@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Section, Segmented } from "@/components/ui/Segmented";
 import { MetricChart } from "@/components/MetricChart";
+import { Note } from "@/components/Note";
 import { useAuthStore } from "@/hooks/useAuth";
 import { UserMenu } from "@/components/UserMenu";
 import { healthService, type HeartRateSample } from "@/lib/health";
@@ -1120,12 +1121,16 @@ function RemindersTab() {
               <Pressable
                 onPress={() => handleToggle(s)}
                 className={[
-                  "px-2.5 py-1 rounded-full border",
+                  "px-2.5 py-1 rounded-full border flex-row items-center gap-1",
                   s.enabled ? "bg-accent-soft border-accent-ink" : "bg-paper-2 border-line-soft",
                 ].join(" ")}
               >
+                <View className={[
+                  "w-2 h-2 rounded-full",
+                  s.enabled ? "bg-accent-ink" : "bg-ink-4",
+                ].join(" ")} />
                 <Text className={["text-[10px] font-bold", s.enabled ? "text-accent-ink" : "text-ink-3"].join(" ")}>
-                  {s.enabled ? "BẬT" : "TẮT"}
+                  {s.enabled ? "Đang bật" : "Đã tắt"}
                 </Text>
               </Pressable>
               <Pressable onPress={() => openEdit(s)} hitSlop={8}>
