@@ -25,7 +25,7 @@ export default function PatientLayout() {
           borderTopWidth: 1,
         },
         tabBarLabelStyle: { fontSize: 9, fontWeight: "700" },
-        tabBarActiveTintColor: "#1a1a1a",
+        tabBarActiveTintColor: "#5eb594",
         tabBarInactiveTintColor: "#767676",
       }}
     >
