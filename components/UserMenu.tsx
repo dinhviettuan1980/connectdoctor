@@ -86,12 +86,12 @@ export function UserMenu() {
 
       try {
         const url = await uploadAvatar(selected, user.uid);
-        // Persist URL; onSnapshot will push it back → avatarUri switches to url
         await setDoc(doc(db, "users", user.uid), { photoURL: url }, { merge: true });
-      } catch {
-        // Upload failed — persist the local URI so it survives Firestore round-trip
-        // (works on the same device; file:// URIs are device-local)
-        await setDoc(doc(db, "users", user.uid), { photoURL: selected }, { merge: true });
+      } catch (e) {
+        console.error("[avatar upload]", e);
+        // Upload failed — localUri still shows the preview on this device,
+        // but we don't persist a file:// URI to Firestore.
+        setLocalUri(null);
       }
     } catch (e) {
       console.error("[avatar pick]", e);
