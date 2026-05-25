@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View, ActivityIndicator, Platform, StyleSheet } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { doc, setDoc } from "firebase/firestore";
@@ -32,6 +32,16 @@ export function UserMenu() {
   const [confirming, setConfirming] = useState(false);
   const [pickingPhoto, setPickingPhoto] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Optimistic local URI — shown immediately after picking, cleared once
+  // Firestore propagates the real URL back via onSnapshot.
+  const [localUri, setLocalUri] = useState<string | null>(null);
+
+  // Once the store reflects the new photoURL, drop the local preview.
+  useEffect(() => {
+    setLocalUri(null);
+  }, [user?.photoURL]);
+
+  const avatarUri = localUri ?? user?.photoURL ?? undefined;
 
   const close = () => { setVisible(false); setConfirming(false); setPickingPhoto(false); };
 
@@ -40,7 +50,7 @@ export function UserMenu() {
     await signOut();
   };
 
-  const changeAvatar = async (source: "camera" | "library") => {
+  const pickAndUpload = async (source: "camera" | "library") => {
     if (!user) return;
     setPickingPhoto(false);
     try {
@@ -48,21 +58,44 @@ export function UserMenu() {
       if (source === "camera") {
         const { granted } = await ImagePicker.requestCameraPermissionsAsync();
         if (!granted) return;
-        result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+        result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
       } else {
-        // On web, launchImageLibraryAsync opens the browser file picker directly
         if (Platform.OS !== "web") {
           const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (!granted) return;
         }
-        result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+        result = await ImagePicker.launchImageLibraryAsync({
+          allowsEditing: true,   // crop/resize UI before confirming
+          aspect: [1, 1],
+          quality: 0.8,
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        });
       }
+
       if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      const selected = result.assets[0].uri;
+
+      // Show immediately — don't wait for upload
+      setLocalUri(selected);
       setUploading(true);
-      const url = await uploadAvatar(result.assets[0].uri, user.uid);
-      await setDoc(doc(db, "users", user.uid), { photoURL: url }, { merge: true });
+
+      try {
+        const url = await uploadAvatar(selected, user.uid);
+        // Persist URL; onSnapshot will push it back → avatarUri switches to url
+        await setDoc(doc(db, "users", user.uid), { photoURL: url }, { merge: true });
+      } catch {
+        // Upload failed — persist the local URI so it survives Firestore round-trip
+        // (works on the same device; file:// URIs are device-local)
+        await setDoc(doc(db, "users", user.uid), { photoURL: selected }, { merge: true });
+      }
     } catch (e) {
-      console.error("[avatar upload]", e);
+      console.error("[avatar pick]", e);
+      setLocalUri(null);
     } finally {
       setUploading(false);
     }
@@ -76,11 +109,10 @@ export function UserMenu() {
       {/* User info header */}
       <View className="px-4 pt-4 pb-3 gap-2 border-b border-line-soft">
         <View className="flex-row items-center gap-3">
-          {/* Avatar — tap to change photo */}
           <Pressable
             onPress={() => {
               if (Platform.OS === "web") {
-                changeAvatar("library"); // opens browser file picker directly
+                pickAndUpload("library");
               } else {
                 setPickingPhoto((v) => !v);
               }
@@ -92,7 +124,7 @@ export function UserMenu() {
               </View>
             ) : (
               <View>
-                <Avatar label={user.displayName ?? "?"} uri={user.photoURL ?? undefined} size="lg" />
+                <Avatar label={user.displayName ?? "?"} uri={avatarUri} size="lg" />
                 <View
                   className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-accent items-center justify-center"
                   style={{ borderWidth: 1.5, borderColor: "#fafaf7" }}
@@ -120,17 +152,17 @@ export function UserMenu() {
           </View>
         </View>
 
-        {/* Photo picker row — native only (web goes straight to file picker above) */}
+        {/* Camera / library choice row — native only */}
         {pickingPhoto && (
           <View className="flex-row gap-2 mt-1">
             <Pressable
-              onPress={() => changeAvatar("camera")}
+              onPress={() => pickAndUpload("camera")}
               className="flex-1 bg-paper-2 border border-line-soft rounded-lg py-2 items-center"
             >
               <Text className="text-xs font-bold text-ink">📷 Chụp ảnh</Text>
             </Pressable>
             <Pressable
-              onPress={() => changeAvatar("library")}
+              onPress={() => pickAndUpload("library")}
               className="flex-1 bg-paper-2 border border-line-soft rounded-lg py-2 items-center"
             >
               <Text className="text-xs font-bold text-ink">🖼 Thư viện</Text>
@@ -177,7 +209,7 @@ export function UserMenu() {
   return (
     <>
       <Pressable onPress={() => setVisible(true)} hitSlop={8}>
-        <Avatar label={user.displayName ?? "?"} uri={user.photoURL ?? undefined} size="md" />
+        <Avatar label={user.displayName ?? "?"} uri={avatarUri} size="md" />
       </Pressable>
 
       <Modal
@@ -186,17 +218,10 @@ export function UserMenu() {
         animationType={Platform.OS === "web" ? "none" : "fade"}
         onRequestClose={close}
       >
-        {/*
-         * Use absoluteFillObject instead of flex:1 for the backdrop.
-         * On web, flex:1 doesn't reliably fill the Modal container because
-         * react-native-web's Modal portal may not propagate a flex height.
-         * absoluteFillObject (position:absolute, inset:0) always works.
-         */}
         <Pressable
           style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.35)" }]}
           onPress={close}
         />
-        {/* Card is a sibling of backdrop, not a child — no stopPropagation needed */}
         <View style={{ position: "absolute", top: 60, right: 16, minWidth: 240 }}>
           {menuCard}
         </View>
