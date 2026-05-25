@@ -30,6 +30,11 @@ import {
 import { useRouter } from "expo-router";
 import { addMetric, deleteMetric, subscribeToMetrics } from "@/lib/metrics";
 import { getPatientProfile, savePatientProfile } from "@/lib/patientProfile";
+import {
+  addSchedule, updateSchedule, deleteSchedule,
+  subscribeToSchedules, type MedicationSchedule,
+} from "@/lib/medicationSchedules";
+import { requestNotificationPermission } from "@/lib/notifications";
 import type { MetricEntry, MetricType, PatientProfile } from "@/lib/types";
 
 function formatDateTime(ts: number): string {
@@ -243,6 +248,7 @@ const TABS = [
   { key: "info", label: "Thông tin" },
   { key: "meds", label: "Đơn thuốc" },
   { key: "metrics", label: "Chỉ số" },
+  { key: "reminders", label: "Nhắc nhở" },
 ];
 
 export default function PatientProfile() {
@@ -262,6 +268,7 @@ export default function PatientProfile() {
       {tab === "info" && <InfoTab />}
       {tab === "meds" && <MedsTab />}
       {tab === "metrics" && <MetricsTab onAdd={() => router.push("/(patient)/ocr/upload?kind=metrics")} />}
+      {tab === "reminders" && <RemindersTab />}
     </SafeAreaView>
   );
 }
@@ -999,6 +1006,234 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
               <Button variant="secondary" size="md" block onPress={() => setShowAdd(false)}>Huỷ</Button>
               <Button variant="primary" size="md" block loading={saving} onPress={handleSave}>Lưu</Button>
             </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </ScrollView>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reminders tab — medication schedule CRUD + local notifications
+// ---------------------------------------------------------------------------
+
+function pad2(n: number) { return String(n).padStart(2, "0"); }
+
+function reminderTime(hour: number, minute: number) {
+  const rMin = minute < 5 ? minute + 55 : minute - 5;
+  const rHour = minute < 5 ? (hour - 1 + 24) % 24 : hour;
+  return `${pad2(rHour)}:${pad2(rMin)}`;
+}
+
+function RemindersTab() {
+  const user = useAuthStore((s) => s.user);
+  const [schedules, setSchedules] = useState<MedicationSchedule[]>([]);
+  const [permGranted, setPermGranted] = useState<boolean | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [draftLabel, setDraftLabel] = useState("");
+  const [draftHour, setDraftHour] = useState(8);
+  const [draftMinute, setDraftMinute] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    requestNotificationPermission().then(setPermGranted);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    return subscribeToSchedules(user.uid, setSchedules);
+  }, [user?.uid]);
+
+  const openAdd = () => {
+    setDraftLabel(""); setDraftHour(8); setDraftMinute(0);
+    setEditId(null); setAdding(true);
+  };
+
+  const openEdit = (s: MedicationSchedule) => {
+    setDraftLabel(s.label); setDraftHour(s.hour); setDraftMinute(s.minute);
+    setEditId(s.id); setAdding(true);
+  };
+
+  const handleSave = async () => {
+    if (!user?.uid || !draftLabel.trim()) return;
+    setSaving(true);
+    try {
+      if (editId) {
+        await updateSchedule(user.uid, editId, {
+          label: draftLabel.trim(), hour: draftHour, minute: draftMinute, enabled: true,
+        });
+      } else {
+        await addSchedule(user.uid, draftLabel.trim(), draftHour, draftMinute);
+      }
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggle = (s: MedicationSchedule) => {
+    if (!user?.uid) return;
+    updateSchedule(user.uid, s.id, { enabled: !s.enabled });
+  };
+
+  const handleDelete = (s: MedicationSchedule) => {
+    if (!user?.uid) return;
+    Alert.alert("Xoá lịch nhắc", `Xoá "${s.label}"?`, [
+      { text: "Huỷ", style: "cancel" },
+      { text: "Xoá", style: "destructive", onPress: () => deleteSchedule(user.uid!, s.id) },
+    ]);
+  };
+
+  const hourOptions = Array.from({ length: 24 }, (_, i) => i);
+  const minuteOptions = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      {permGranted === false && (
+        <Note>Thông báo bị tắt. Vào Cài đặt → ConnectDoctor → Thông báo để bật.</Note>
+      )}
+
+      <Button variant="primary" block onPress={openAdd}>+ Thêm giờ uống thuốc</Button>
+
+      {schedules.length === 0 && !adding && (
+        <View className="items-center py-12 gap-1">
+          <Text className="text-sm text-ink-3">Chưa có lịch nhắc nào</Text>
+          <Text className="text-[11px] text-ink-4">Nhấn "+ Thêm" để tạo lịch nhắc uống thuốc</Text>
+        </View>
+      )}
+
+      {schedules.map((s) => (
+        <Card key={s.id} padding="md">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 gap-0.5 mr-3">
+              <Text className="text-xs font-bold text-ink">{s.label}</Text>
+              <Text className="font-mono text-sm font-bold text-accent-ink">
+                {pad2(s.hour)}:{pad2(s.minute)}
+                {"  "}
+                <Text className="text-[10px] text-ink-3 font-normal">
+                  nhắc lúc {reminderTime(s.hour, s.minute)}
+                </Text>
+              </Text>
+            </View>
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                onPress={() => handleToggle(s)}
+                className={[
+                  "px-2.5 py-1 rounded-full border",
+                  s.enabled ? "bg-accent-soft border-accent-ink" : "bg-paper-2 border-line-soft",
+                ].join(" ")}
+              >
+                <Text className={["text-[10px] font-bold", s.enabled ? "text-accent-ink" : "text-ink-3"].join(" ")}>
+                  {s.enabled ? "BẬT" : "TẮT"}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => openEdit(s)} hitSlop={8}>
+                <Text className="text-xs text-accent-ink">Sửa</Text>
+              </Pressable>
+              <Pressable onPress={() => handleDelete(s)} hitSlop={8}>
+                <Text className="text-xs text-danger">Xoá</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Card>
+      ))}
+
+      {/* Add / Edit bottom sheet */}
+      <Modal
+        visible={adding}
+        transparent
+        animationType={Platform.OS === "web" ? "none" : "slide"}
+        onRequestClose={() => setAdding(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1, justifyContent: "flex-end" }}
+        >
+          <Pressable
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)" }}
+            onPress={() => setAdding(false)}
+          />
+          <View className="bg-paper rounded-t-2xl overflow-hidden" style={{ maxHeight: "80%" }}>
+            <View className="flex-row justify-between items-center px-5 py-4 border-b border-line-soft">
+              <Text className="font-bold text-base text-ink">
+                {editId ? "Sửa lịch nhắc" : "Thêm lịch nhắc"}
+              </Text>
+              <Pressable onPress={() => setAdding(false)} hitSlop={12}>
+                <Text className="text-ink-3 text-base">✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+              <Input
+                label="Tên gợi nhớ"
+                value={draftLabel}
+                onChangeText={setDraftLabel}
+                placeholder="Vd: Uống thuốc sáng, Uống thuốc tối…"
+                returnKeyType="done"
+              />
+
+              <View className="gap-1.5">
+                <Text className="text-[10px] uppercase tracking-wider text-ink-3">Giờ</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View className="flex-row gap-2 pb-1">
+                    {hourOptions.map((h) => (
+                      <Pressable
+                        key={h}
+                        onPress={() => setDraftHour(h)}
+                        className={[
+                          "w-11 h-11 rounded-lg items-center justify-center border",
+                          draftHour === h ? "bg-accent border-accent-ink" : "bg-paper-2 border-line-soft",
+                        ].join(" ")}
+                      >
+                        <Text className={["font-mono text-sm font-bold", draftHour === h ? "text-paper" : "text-ink"].join(" ")}>
+                          {pad2(h)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              <View className="gap-1.5">
+                <Text className="text-[10px] uppercase tracking-wider text-ink-3">Phút</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {minuteOptions.map((m) => (
+                    <Pressable
+                      key={m}
+                      onPress={() => setDraftMinute(m)}
+                      className={[
+                        "w-14 h-10 rounded-lg items-center justify-center border",
+                        draftMinute === m ? "bg-accent border-accent-ink" : "bg-paper-2 border-line-soft",
+                      ].join(" ")}
+                    >
+                      <Text className={["font-mono text-sm font-bold", draftMinute === m ? "text-paper" : "text-ink"].join(" ")}>
+                        :{pad2(m)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <Card variant="accent" padding="sm">
+                <Text className="text-[11px] text-accent-ink text-center">
+                  Thông báo sẽ xuất hiện lúc{" "}
+                  <Text className="font-bold">{reminderTime(draftHour, draftMinute)}</Text>
+                  {" "}— 5 phút trước {pad2(draftHour)}:{pad2(draftMinute)}
+                </Text>
+              </Card>
+
+              <View className="flex-row gap-2">
+                <View className="flex-1">
+                  <Button variant="secondary" block onPress={() => setAdding(false)}>Huỷ</Button>
+                </View>
+                <View className="flex-1">
+                  <Button variant="primary" block loading={saving} disabled={!draftLabel.trim()} onPress={handleSave}>
+                    {editId ? "Lưu" : "Thêm"}
+                  </Button>
+                </View>
+              </View>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>

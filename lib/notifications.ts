@@ -43,3 +43,15 @@ export async function addNotificationListener(
   navigator.serviceWorker?.addEventListener("message", listener);
   return () => navigator.serviceWorker?.removeEventListener("message", listener);
 }
+
+// ── Medication reminders (web: not supported) ───────────────────────────────
+
+export async function requestNotificationPermission(): Promise<boolean> {
+  return false;
+}
+
+export async function scheduleMedicationReminder(
+  _id: string, _label: string, _hour: number, _minute: number,
+): Promise<void> {}
+
+export async function cancelMedicationReminder(_id: string): Promise<void> {}
