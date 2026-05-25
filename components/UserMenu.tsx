@@ -30,7 +30,13 @@ async function uploadAvatar(uri: string, uid: string): Promise<string> {
   const res = await fetch(`${STORAGE_URL}/upload`, { method: "POST", body: formData });
   if (!res.ok) throw new Error("Upload failed");
   const json = await res.json();
-  return json.url as string;
+  // Server may return a localhost URL when running behind a reverse proxy.
+  // Rewrite to the correct public base so the stored URL is always fetchable.
+  const rawUrl: string = json.url;
+  const publicUrl = rawUrl.startsWith("http")
+    ? STORAGE_URL + new URL(rawUrl).pathname.replace(/^\/storage/, "")
+    : rawUrl;
+  return publicUrl;
 }
 
 export function UserMenu() {
