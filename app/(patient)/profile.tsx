@@ -506,12 +506,16 @@ function MedsTab() {
     if (!user?.uid || !selectedId) return;
     let result: ImagePicker.ImagePickerResult;
     if (fromCamera) {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền camera."); return; }
+      if (Platform.OS !== "web") {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền camera."); return; }
+      }
       result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
     } else {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền thư viện ảnh."); return; }
+      if (Platform.OS !== "web") {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Cần quyền", "Cấp quyền thư viện ảnh."); return; }
+      }
       result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
     }
     if (result.canceled || !result.assets?.[0]) return;
@@ -662,12 +666,16 @@ function MedsTab() {
 
               {/* Add photo buttons */}
               <View className="flex-row gap-2">
-                <Button block onPress={() => handleAddImage(false)} disabled={uploading}>
-                  📁 Chọn file
-                </Button>
-                <Button variant="primary" block onPress={() => handleAddImage(true)} disabled={uploading}>
-                  📷 Chụp ảnh
-                </Button>
+                <View className="flex-1">
+                  <Button block onPress={() => handleAddImage(false)} disabled={uploading}>
+                    📁 Chọn file
+                  </Button>
+                </View>
+                <View className="flex-1">
+                  <Button variant="primary" block onPress={() => handleAddImage(true)} disabled={uploading}>
+                    📷 Chụp ảnh
+                  </Button>
+                </View>
               </View>
 
               {/* Delete prescription */}
