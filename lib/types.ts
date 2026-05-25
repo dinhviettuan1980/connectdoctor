@@ -9,8 +9,9 @@ export interface AppUser {
   displayName: string | null;
   role: Role;
   createdAt: number;
-  expoPushToken?: string;  // iOS / Android
-  fcmToken?: string;       // Web push
+  photoURL?: string | null;
+  expoPushToken?: string;
+  fcmToken?: string;
 }
 
 export interface PatientProfile {

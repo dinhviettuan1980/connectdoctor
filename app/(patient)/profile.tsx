@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { Section, Segmented } from "@/components/ui/Segmented";
 import { MetricChart } from "@/components/MetricChart";
 import { useAuthStore } from "@/hooks/useAuth";
-import { signOut } from "@/lib/auth";
+import { UserMenu } from "@/components/UserMenu";
 import { healthService, type HeartRateSample } from "@/lib/health";
 import {
   createPrescription,
@@ -255,11 +255,7 @@ export default function PatientProfile() {
         <AppBar
           title="Hồ sơ"
           subtitle="Bệnh nhân"
-          right={
-            <Pressable onPress={signOut}>
-              <Text className="text-xs underline text-ink-3">Đăng xuất</Text>
-            </Pressable>
-          }
+          right={<UserMenu />}
         />
         <TopTabs tabs={TABS} active={tab} onChange={setTab} />
       </View>

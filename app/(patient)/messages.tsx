@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { AppBar } from "@/components/AppBar";
+import { UserMenu } from "@/components/UserMenu";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuthStore } from "@/hooks/useAuth";
@@ -25,7 +26,7 @@ export default function Messages() {
   return (
     <SafeAreaView className="flex-1 bg-paper">
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <AppBar title="Tin nhắn" subtitle={`${threads.length} cuộc chat`} />
+        <AppBar title="Tin nhắn" subtitle={`${threads.length} cuộc chat`} right={<UserMenu />} />
         <View className="gap-1.5">
           {threads.map((t) => (
             <Pressable

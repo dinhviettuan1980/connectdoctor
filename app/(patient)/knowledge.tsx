@@ -1,13 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, Pressable, ActivityIndicator, GestureResponderEvent,
+  View, Text, ScrollView, Pressable, ActivityIndicator, GestureResponderEvent, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useAuthStore } from "@/hooks/useAuth";
 import { AppBar } from "@/components/AppBar";
 import { Chip } from "@/components/ui/Chip";
+import { UserMenu } from "@/components/UserMenu";
 
 const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
+const CACHE_DIR = FileSystem.documentDirectory ? FileSystem.documentDirectory + "knowledge/" : null;
 
 type Track = {
   file: string;
@@ -35,11 +41,12 @@ const TRACKS: Track[] = [
   { file: "15-IxgSNnbR1Zg.m4a",  title: "Moonlit Waterfall – Yoga & Better Sleep",    duration: "1:00:17", durationMs: 3617000, category: "Thiền định"  },
 ];
 
-const CATEGORIES = ["Tất cả", "Thiên nhiên", "Thiền định", "Âm nhạc"];
+const CATEGORIES = ["Nhạc của tôi", "Tất cả"];
 const CAT_EMOJI: Record<string, string> = {
   "Thiên nhiên": "🌿",
   "Thiền định": "🧘",
   "Âm nhạc": "🎵",
+  "Nhạc của tôi": "❤️",
 };
 
 function fmtMs(ms: number) {
@@ -50,8 +57,26 @@ function fmtMs(ms: number) {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
+function localPath(file: string) {
+  return CACHE_DIR ? CACHE_DIR + file : null;
+}
+
+async function ensureCacheDir() {
+  if (!CACHE_DIR) return;
+  const info = await FileSystem.getInfoAsync(CACHE_DIR);
+  if (!info.exists) await FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true });
+}
+
+async function isCached(file: string): Promise<boolean> {
+  const path = localPath(file);
+  if (!path) return false;
+  const info = await FileSystem.getInfoAsync(path);
+  return info.exists && (info as any).size > 0;
+}
+
 export default function Knowledge() {
-  const [cat, setCat] = useState("Tất cả");
+  const user = useAuthStore((s) => s.user);
+  const [cat, setCat] = useState("Nhạc của tôi");
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,7 +86,73 @@ export default function Knowledge() {
   const barRef = useRef<View>(null);
   const barWidthRef = useRef(1);
 
-  const filtered = cat === "Tất cả" ? TRACKS : TRACKS.filter((t) => t.category === cat);
+  // Offline cache state: set of cached file names
+  const [cached, setCached] = useState<Set<string>>(new Set());
+  // Downloading state: set of file names being downloaded
+  const [downloading, setDownloading] = useState<Set<string>>(new Set());
+  // My album: set of file names saved by user
+  const [myAlbum, setMyAlbum] = useState<Set<string>>(new Set());
+  const [albumLoading, setAlbumLoading] = useState(false);
+
+  // Load cached files on mount
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    (async () => {
+      await ensureCacheDir();
+      const results = await Promise.all(TRACKS.map((t) => isCached(t.file).then((ok) => ok ? t.file : null)));
+      setCached(new Set(results.filter(Boolean) as string[]));
+    })();
+  }, []);
+
+  // Load my album from Firestore
+  useEffect(() => {
+    if (!user) return;
+    setAlbumLoading(true);
+    getDoc(doc(db, "users", user.uid))
+      .then((snap) => {
+        const data = snap.data();
+        const album: string[] = data?.knowledgeAlbum ?? [];
+        setMyAlbum(new Set(album));
+      })
+      .finally(() => setAlbumLoading(false));
+  }, [user?.uid]);
+
+  const saveAlbum = useCallback(async (newSet: Set<string>) => {
+    if (!user) return;
+    await setDoc(doc(db, "users", user.uid), { knowledgeAlbum: [...newSet] }, { merge: true });
+  }, [user]);
+
+  const toggleAlbum = async (file: string) => {
+    const next = new Set(myAlbum);
+    if (next.has(file)) next.delete(file);
+    else next.add(file);
+    setMyAlbum(next);
+    await saveAlbum(next);
+  };
+
+  const downloadTrack = async (track: Track) => {
+    const path = localPath(track.file);
+    if (!path || Platform.OS === "web") return;
+    setDownloading((prev) => new Set([...prev, track.file]));
+    try {
+      await ensureCacheDir();
+      await FileSystem.downloadAsync(
+        `${STORAGE_URL}/files/knowledge/${track.file}`,
+        path,
+      );
+      setCached((prev) => new Set([...prev, track.file]));
+    } catch (e) {
+      console.error("[download]", e);
+    } finally {
+      setDownloading((prev) => { const s = new Set(prev); s.delete(track.file); return s; });
+    }
+  };
+
+  const trackUri = (track: Track): string => {
+    const path = localPath(track.file);
+    if (path && cached.has(track.file)) return path;
+    return `${STORAGE_URL}/files/knowledge/${track.file}`;
+  };
 
   const playTrack = async (track: Track) => {
     if (soundRef.current) {
@@ -74,12 +165,9 @@ export default function Knowledge() {
     setPosition(0);
     setDuration(0);
     try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-      });
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true });
       const { sound } = await Audio.Sound.createAsync(
-        { uri: `${STORAGE_URL}/files/knowledge/${track.file}` },
+        { uri: trackUri(track) },
         { shouldPlay: true },
         (status) => {
           if (!status.isLoaded) return;
@@ -116,9 +204,8 @@ export default function Knowledge() {
 
   const skipPrev = () => {
     if (!currentTrack) return;
-    if (position > 3000) {
-      soundRef.current?.setPositionAsync(0);
-    } else {
+    if (position > 3000) soundRef.current?.setPositionAsync(0);
+    else {
       const idx = TRACKS.indexOf(currentTrack);
       if (idx > 0) playTrack(TRACKS[idx - 1]);
     }
@@ -126,8 +213,7 @@ export default function Knowledge() {
 
   const seekBy = (deltaMs: number) => {
     if (!soundRef.current || duration === 0) return;
-    const next = Math.max(0, Math.min(duration, position + deltaMs));
-    soundRef.current.setPositionAsync(next);
+    soundRef.current.setPositionAsync(Math.max(0, Math.min(duration, position + deltaMs)));
   };
 
   const seekToTap = (e: GestureResponderEvent) => {
@@ -136,20 +222,27 @@ export default function Knowledge() {
     barRef.current?.measure((_x, _y, width, _h, barPageX) => {
       const localX = pageX - barPageX;
       if (!Number.isFinite(localX) || width <= 0) return;
-      const pct = Math.max(0, Math.min(1, localX / width));
-      soundRef.current?.setPositionAsync(pct * duration);
+      soundRef.current?.setPositionAsync(Math.max(0, Math.min(1, localX / width)) * duration);
     });
   };
 
   useEffect(() => () => { soundRef.current?.unloadAsync(); }, []);
 
+  const filtered =
+    cat === "Nhạc của tôi"
+      ? TRACKS.filter((t) => myAlbum.has(t.file))
+      : cat === "Tất cả"
+      ? TRACKS
+      : TRACKS.filter((t) => t.category === cat);
+
   const progress = duration > 0 ? position / duration : 0;
   const displayDuration = duration > 0 ? duration : (currentTrack?.durationMs ?? 0);
+  const isNative = Platform.OS !== "web";
 
   return (
     <SafeAreaView className="flex-1 bg-paper" edges={["top", "left", "right"]}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: currentTrack ? 100 : 16 }}>
-        <AppBar title="Thư giãn & Thiền định" subtitle={`${TRACKS.length} bản nhạc`} />
+        <AppBar title="Thư giãn & Thiền định" subtitle={`${TRACKS.length} bản nhạc`} right={<UserMenu />} />
 
         {/* Category filter */}
         <ScrollView
@@ -165,11 +258,25 @@ export default function Knowledge() {
           ))}
         </ScrollView>
 
+        {/* Empty state for My Album */}
+        {cat === "Nhạc của tôi" && !albumLoading && filtered.length === 0 && (
+          <View className="items-center py-12 gap-2">
+            <Text className="text-3xl">❤️</Text>
+            <Text className="text-sm text-ink-3 text-center">
+              Chưa có bài nào.{"\n"}Bấm ❤️ trên bài nhạc để thêm vào đây.
+            </Text>
+          </View>
+        )}
+
         {/* Track list */}
         <View>
           {filtered.map((track) => {
             const isActive = currentTrack?.file === track.file;
             const trackNum = TRACKS.indexOf(track) + 1;
+            const isCachedFile = cached.has(track.file);
+            const isDownloading = downloading.has(track.file);
+            const inAlbum = myAlbum.has(track.file);
+
             return (
               <Pressable
                 key={track.file}
@@ -213,11 +320,38 @@ export default function Knowledge() {
                     <View className="flex-row items-center gap-1 mt-0.5">
                       <Text className="text-[10px]">{CAT_EMOJI[track.category]}</Text>
                       <Text className="text-[10px] text-ink-3">{track.category}</Text>
+                      {isCachedFile && isNative && (
+                        <Text className="text-[10px] text-accent-ink ml-1">● offline</Text>
+                      )}
                     </View>
                   </View>
 
                   {/* Duration */}
-                  <Text className="font-mono text-[10px] text-ink-3">{track.duration}</Text>
+                  <Text className="font-mono text-[10px] text-ink-3 mr-1">{track.duration}</Text>
+
+                  {/* Add to album */}
+                  <Pressable
+                    onPress={() => toggleAlbum(track.file)}
+                    hitSlop={8}
+                    className="w-8 h-8 items-center justify-center"
+                  >
+                    <Text className="text-base">{inAlbum ? "❤️" : "🤍"}</Text>
+                  </Pressable>
+
+                  {/* Download (native only, hide if cached) */}
+                  {isNative && !isCachedFile && (
+                    <Pressable
+                      onPress={(e) => { e.stopPropagation?.(); downloadTrack(track); }}
+                      hitSlop={8}
+                      className="w-8 h-8 items-center justify-center"
+                    >
+                      {isDownloading ? (
+                        <ActivityIndicator size="small" color="#5eb594" />
+                      ) : (
+                        <Text className="text-base text-ink-3">⬇</Text>
+                      )}
+                    </Pressable>
+                  )}
                 </View>
               </Pressable>
             );
@@ -225,49 +359,46 @@ export default function Knowledge() {
         </View>
       </ScrollView>
 
-      {/* ── Mini player bar ──────────────────────────────────────────────────── */}
+      {/* ── Mini player bar ── */}
       {currentTrack && (
         <View
           className="absolute bottom-0 left-0 right-0 bg-paper border-t border-line"
           style={{ paddingBottom: 18 }}
         >
-          {/* Seekable progress bar */}
           <Pressable
             ref={barRef}
             onLayout={(e) => { barWidthRef.current = e.nativeEvent.layout.width; }}
             onPress={seekToTap}
-            style={{ height: 20, justifyContent: "center", paddingHorizontal: 0 }}
+            style={{ height: 20, justifyContent: "center" }}
           >
-            <View style={{ height: 3, backgroundColor: "#f1f0ea", marginHorizontal: 0 }}>
-              <View style={{ height: 3, backgroundColor: "#5eb594", width: `${(progress * 100).toFixed(1)}%` }} />
+            <View style={{ height: 3, backgroundColor: "#f1f0ea" }}>
+              <View style={{ height: 3, backgroundColor: "#5eb594", width: `${(progress * 100).toFixed(1)}%` as any }} />
             </View>
-            {/* Thumb */}
             <View
               style={{
                 position: "absolute",
                 left: `${(progress * 100).toFixed(1)}%` as any,
-                width: 12,
-                height: 12,
-                borderRadius: 6,
-                backgroundColor: "#5eb594",
-                marginLeft: -6,
-                top: 4,
+                width: 12, height: 12, borderRadius: 6,
+                backgroundColor: "#5eb594", marginLeft: -6, top: 4,
               }}
             />
           </Pressable>
 
           <View className="flex-row items-center px-4 pt-1 gap-3">
-            {/* Track info */}
             <View className="flex-1">
               <Text className="text-xs font-bold text-ink" numberOfLines={1}>
                 {currentTrack.title}
               </Text>
-              <Text className="font-mono text-[10px] text-ink-3 mt-0.5">
-                {fmtMs(position)} / {fmtMs(displayDuration)}
-              </Text>
+              <View className="flex-row items-center gap-2">
+                <Text className="font-mono text-[10px] text-ink-3 mt-0.5">
+                  {fmtMs(position)} / {fmtMs(displayDuration)}
+                </Text>
+                {isNative && cached.has(currentTrack.file) && (
+                  <Text className="text-[10px] text-accent-ink">offline</Text>
+                )}
+              </View>
             </View>
 
-            {/* Controls */}
             <View className="flex-row items-center gap-4">
               <Pressable onPress={skipPrev} hitSlop={10}>
                 <Text className="text-xl text-ink-2">⏮</Text>

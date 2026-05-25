@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppBar } from "@/components/AppBar";
 import { TopTabs } from "@/components/TopTabs";
@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Input } from "@/components/ui/Input";
 import { Section } from "@/components/ui/Segmented";
 import { Note } from "@/components/Note";
-import { signOut } from "@/lib/auth";
+import { UserMenu } from "@/components/UserMenu";
 
 const TABS = [
   { key: "profile", label: "Hồ sơ" },
@@ -24,11 +24,7 @@ export default function DoctorProfile() {
       <View className="px-4 pt-2 gap-2">
         <AppBar
           title="Hồ sơ bác sỹ"
-          right={
-            <Pressable onPress={signOut}>
-              <Text className="text-xs underline text-ink-3">Đăng xuất</Text>
-            </Pressable>
-          }
+          right={<UserMenu />}
         />
         <TopTabs tabs={TABS} active={tab} onChange={setTab} />
       </View>

@@ -1,6 +1,7 @@
 import { View, Text, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppBar } from "@/components/AppBar";
+import { UserMenu } from "@/components/UserMenu";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Chip } from "@/components/ui/Chip";
@@ -18,7 +19,7 @@ export default function DoctorPatients() {
   return (
     <SafeAreaView className="flex-1 bg-paper">
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <AppBar title="Bệnh nhân" subtitle={`${PATIENTS.length} đang theo dõi`} />
+        <AppBar title="Bệnh nhân" subtitle={`${PATIENTS.length} đang theo dõi`} right={<UserMenu />} />
         <Input placeholder="Tìm theo tên, mã BN…" />
         <View className="flex-row gap-1.5 flex-wrap">
           <Chip variant="accent">Tất cả</Chip>

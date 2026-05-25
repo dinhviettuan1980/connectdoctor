@@ -1,6 +1,7 @@
 import { View, Text, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppBar } from "@/components/AppBar";
+import { UserMenu } from "@/components/UserMenu";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 
@@ -16,7 +17,7 @@ export default function History() {
   return (
     <SafeAreaView className="flex-1 bg-paper">
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <AppBar title="Lịch sử sức khỏe" subtitle="Tất cả các thay đổi" />
+        <AppBar title="Lịch sử sức khỏe" subtitle="Tất cả các thay đổi" right={<UserMenu />} />
         <View className="flex-row gap-1.5 flex-wrap">
           <Chip variant="accent">Tất cả</Chip>
           <Chip variant="soft">Thuốc</Chip>
