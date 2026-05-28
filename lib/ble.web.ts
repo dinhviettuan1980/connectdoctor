@@ -8,9 +8,8 @@ export interface HealthDevice {
 
 export async function requestBluetoothPermission(): Promise<boolean> { return false; }
 
-export function scanForHealthDevices(
+export async function scanForHealthDevices(
   _onFound: (devices: HealthDevice[]) => void,
-  _durationMs?: number,
-): () => void { return () => {}; }
+): Promise<() => void> { return () => {}; }
 
 export function stopScan() {}

@@ -314,7 +314,9 @@ function InfoTab() {
 
   const startScan = () => {
     setDiscovered([]); setScanDone(false); setScanning(true);
-    stopScanRef.current = scanForHealthDevices((devices) => setDiscovered([...devices]), 8000);
+    scanForHealthDevices((devices) => setDiscovered([...devices])).then((stop) => {
+      stopScanRef.current = stop;
+    });
     setTimeout(() => { setScanning(false); setScanDone(true); }, 8500);
   };
 
