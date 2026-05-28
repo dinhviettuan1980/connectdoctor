@@ -53,6 +53,7 @@ export async function scheduleMedicationReminder(
   label: string,
   hour: number,
   minute: number,
+  prescriptionId?: string | null,
 ): Promise<void> {
   await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
 
@@ -66,7 +67,8 @@ export async function scheduleMedicationReminder(
     content: {
       title: "⏰ Nhắc uống thuốc",
       body: `${label} — còn 5 phút nữa là ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
-      sound: true,
+      sound: "alarm.caf",
+      data: { prescriptionId: prescriptionId ?? null },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,

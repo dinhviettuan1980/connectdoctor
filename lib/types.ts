@@ -24,6 +24,7 @@ export interface PatientProfile {
   bloodType?: string;
   conditions: string[];
   allergies: string[];
+  linkedDeviceIds?: string[];  // Firestore my_data document IDs e.g. ["006-B4024-00"]
 }
 
 export interface Medication {

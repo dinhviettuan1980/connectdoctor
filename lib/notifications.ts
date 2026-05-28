@@ -51,7 +51,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
 }
 
 export async function scheduleMedicationReminder(
-  _id: string, _label: string, _hour: number, _minute: number,
+  _id: string, _label: string, _hour: number, _minute: number, _prescriptionId?: string | null,
 ): Promise<void> {}
 
 export async function cancelMedicationReminder(_id: string): Promise<void> {}

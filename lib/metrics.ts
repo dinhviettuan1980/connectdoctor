@@ -1,5 +1,5 @@
 import {
-  collection, addDoc, deleteDoc, doc,
+  collection, addDoc, updateDoc, deleteDoc, doc,
   query, where, onSnapshot,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -11,16 +11,21 @@ export async function addMetric(
   label: string,
   value: string,
   unit?: string,
+  measuredAt?: number,
 ): Promise<string> {
   const now = Date.now();
   const ref = await addDoc(collection(db, "metrics"), {
     patientUid, type, label, value,
     unit: unit ?? null,
     source: "manual",
-    measuredAt: now,
+    measuredAt: measuredAt ?? now,
     createdAt: now,
   });
   return ref.id;
+}
+
+export async function updateMetric(id: string, value: string): Promise<void> {
+  await updateDoc(doc(db, "metrics", id), { value });
 }
 
 export async function deleteMetric(id: string): Promise<void> {

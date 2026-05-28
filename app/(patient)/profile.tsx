@@ -29,13 +29,14 @@ import {
   type PrescriptionImage,
 } from "@/lib/prescriptions";
 import { useRouter } from "expo-router";
-import { addMetric, deleteMetric, subscribeToMetrics } from "@/lib/metrics";
+import { addMetric, updateMetric, deleteMetric, subscribeToMetrics } from "@/lib/metrics";
 import { getPatientProfile, savePatientProfile } from "@/lib/patientProfile";
 import {
   addSchedule, updateSchedule, deleteSchedule,
   subscribeToSchedules, type MedicationSchedule,
 } from "@/lib/medicationSchedules";
 import { requestNotificationPermission } from "@/lib/notifications";
+import { scanForHealthDevices, type HealthDevice } from "@/lib/ble";
 import type { MetricEntry, MetricType, PatientProfile } from "@/lib/types";
 
 function formatDateTime(ts: number): string {
@@ -288,6 +289,11 @@ function InfoTab() {
   const [loading, setLoading] = useState(true);
   const [picker, setPicker] = useState<string | null>(null);
   const [multiPicker, setMultiPicker] = useState<"conditions" | "allergies" | null>(null);
+  // Device scanning
+  const [scanning, setScanning] = useState(false);
+  const [discovered, setDiscovered] = useState<HealthDevice[]>([]);
+  const [scanDone, setScanDone] = useState(false);
+  const stopScanRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -296,10 +302,33 @@ function InfoTab() {
       .finally(() => setLoading(false));
   }, [user?.uid]);
 
+  useEffect(() => () => { stopScanRef.current?.(); }, []);
+
   const save = (update: Partial<Omit<PatientProfile, "uid">>) => {
     if (!user?.uid) return;
     setProfile((prev) => ({ ...prev, ...update }));
     savePatientProfile(user.uid, update).catch(console.error);
+  };
+
+  const linkedIds: string[] = profile.linkedDeviceIds ?? [];
+
+  const startScan = () => {
+    setDiscovered([]); setScanDone(false); setScanning(true);
+    stopScanRef.current = scanForHealthDevices((devices) => setDiscovered([...devices]), 8000);
+    setTimeout(() => { setScanning(false); setScanDone(true); }, 8500);
+  };
+
+  const handleAddDevice = (dev: HealthDevice) => {
+    if (!dev.firestoreId) return;
+    const next = [...new Set([...linkedIds, dev.firestoreId])];
+    save({ linkedDeviceIds: next });
+  };
+
+  const handleRemoveDevice = (deviceId: string) => {
+    Alert.alert("Xoá thiết bị", "Huỷ liên kết thiết bị này?", [
+      { text: "Huỷ", style: "cancel" },
+      { text: "Xoá", style: "destructive", onPress: () => save({ linkedDeviceIds: linkedIds.filter((id) => id !== deviceId) }) },
+    ]);
   };
 
   const currentYear = new Date().getFullYear();
@@ -422,6 +451,61 @@ function InfoTab() {
         )}
       </Section>
 
+      {/* Devices */}
+      <Section
+        title="THIẾT BỊ SỨC KHOẺ"
+        action={
+          <Button variant="secondary" size="sm" loading={scanning} disabled={scanning} onPress={startScan}>
+            {scanning ? "Đang quét…" : "🔍 Quét"}
+          </Button>
+        }
+      >
+        {linkedIds.length === 0 && !scanning && !scanDone && (
+          <Text className="text-[11px] text-ink-3">Chưa có thiết bị. Nhấn Quét để tìm.</Text>
+        )}
+        {linkedIds.map((id) => (
+          <View key={id} className="flex-row items-center justify-between py-1.5 border-b border-dashed border-line-soft">
+            <View className="flex-row items-center gap-2">
+              <Text>⌚</Text>
+              <View>
+                <Text className="text-xs font-bold text-ink">Garmin Watch</Text>
+                <Text className="font-mono text-[10px] text-ink-3">{id}</Text>
+              </View>
+            </View>
+            <Pressable onPress={() => handleRemoveDevice(id)} hitSlop={8}>
+              <Text className="text-xs text-danger">Xoá</Text>
+            </Pressable>
+          </View>
+        ))}
+        {scanning && (
+          <View className="flex-row items-center gap-2 py-2">
+            <ActivityIndicator size="small" color="#5eb594" />
+            <Text className="text-[11px] text-ink-3">Đang tìm thiết bị Garmin qua Bluetooth…</Text>
+          </View>
+        )}
+        {discovered.filter((d) => !linkedIds.includes(d.firestoreId ?? "")).map((dev) => (
+          <View key={dev.bleId} className="flex-row items-center justify-between py-1.5 border-b border-dashed border-line-soft">
+            <View className="flex-row items-center gap-2 flex-1 mr-2">
+              <Text>⌚</Text>
+              <View className="flex-1">
+                <Text className="text-xs font-bold text-ink">{dev.name}</Text>
+                <Text className="font-mono text-[10px] text-ink-3">
+                  {dev.firestoreId ? `ID: ${dev.firestoreId}` : "Chưa có dữ liệu đồng bộ"}
+                </Text>
+              </View>
+            </View>
+            {dev.firestoreId ? (
+              <Button variant="primary" size="sm" onPress={() => handleAddDevice(dev)}>Thêm</Button>
+            ) : (
+              <Text className="text-[10px] text-ink-4">—</Text>
+            )}
+          </View>
+        ))}
+        {scanDone && discovered.length === 0 && (
+          <Text className="text-[11px] text-ink-3 mt-1">Không tìm thấy thiết bị Garmin nào.</Text>
+        )}
+      </Section>
+
       {/* Single-select pickers */}
       <PickerSheet
         visible={picker === "height"} title="Chiều cao" options={heightOptions} value={heightStr}
@@ -502,8 +586,13 @@ function MedsTab() {
       {
         text: "Xoá", style: "destructive",
         onPress: async () => {
-          if (selectedId === p.id) setSelectedId(null);
-          await deletePrescription(p);
+          try {
+            setSelectedId(null);
+            await deletePrescription(p);
+          } catch (err) {
+            console.error("[deletePrescription]", err);
+            Alert.alert("Lỗi", "Không thể xoá đơn thuốc. Kiểm tra kết nối và thử lại.");
+          }
         },
       },
     ]);
@@ -840,7 +929,8 @@ const METRIC_DEFS: Partial<Record<MetricType, MetricDef>> = {
   blood_glucose:  { label: "Đường máu",   unit: "mmol/L" },
   cholesterol:    { label: "Cholesterol", unit: "mmol/L" },
 };
-const VISIBLE_TYPES = Object.keys(METRIC_DEFS) as MetricType[];
+// heart_rate is entered together with blood_pressure — not shown as its own tab
+const VISIBLE_TYPES: MetricType[] = ["blood_pressure", "blood_glucose", "cholesterol"];
 
 function fmtTs(ts: number) {
   return new Date(ts).toLocaleString("vi-VN", {
@@ -852,11 +942,19 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
   const user = useAuthStore((s) => s.user);
   const [activeType, setActiveType] = useState<MetricType>("blood_pressure");
   const [allMetrics, setAllMetrics] = useState<MetricEntry[]>([]);
-  const [chart, setChart] = useState(true);
+  const [chart, setChart] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [valA, setValA] = useState("");
   const [valB, setValB] = useState("");
+  const [valHR, setValHR] = useState("");
   const [saving, setSaving] = useState(false);
+  // Edit state (BP+HR only)
+  const [editEntry, setEditEntry] = useState<MetricEntry | null>(null);
+  const [editHrEntry, setEditHrEntry] = useState<MetricEntry | null>(null);
+  const [editValA, setEditValA] = useState("");
+  const [editValB, setEditValB] = useState("");
+  const [editValHR, setEditValHR] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -867,6 +965,7 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
   const entries = allMetrics
     .filter((e) => e.type === activeType)
     .sort((a, b) => b.measuredAt - a.measuredAt);
+  const hrEntries = allMetrics.filter((e) => e.type === "heart_rate");
 
   const bpPoints = entries.slice(0, 9).reverse();
   const systolicArr  = bpPoints.map((e) => parseInt(e.value.split("/")[0]) || 0);
@@ -876,22 +975,67 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
         Math.round(diastolicArr.reduce((s, v) => s + v, 0) / bpPoints.length)}`
     : null;
 
-  const openAdd = () => { setValA(""); setValB(""); setShowAdd(true); };
+  const findLinkedHR = (e: MetricEntry) =>
+    hrEntries.find((h) => Math.abs(h.measuredAt - e.measuredAt) < 60_000) ?? null;
+
+  const openAdd = () => { setValA(""); setValB(""); setValHR(""); setShowAdd(true); };
+
+  const openEdit = (e: MetricEntry) => {
+    const parts = e.value.split("/");
+    const hr = findLinkedHR(e);
+    setEditValA(parts[0] ?? "");
+    setEditValB(parts[1] ?? "");
+    setEditValHR(hr?.value ?? "");
+    setEditEntry(e);
+    setEditHrEntry(hr);
+  };
 
   const handleSave = async () => {
     if (!user?.uid) return;
     const a = valA.trim();
     const b = valB.trim();
-    if (!a || (def.dual && !b)) return;
+    if (!a || (activeType === "blood_pressure" && !b)) return;
     setSaving(true);
     try {
-      await addMetric(user.uid, activeType, def.label, def.dual ? `${a}/${b}` : a, def.unit || undefined);
+      const now = Date.now();
+      if (activeType === "blood_pressure") {
+        await addMetric(user.uid, "blood_pressure", "Huyết áp", `${a}/${b}`, "mmHg", now);
+        const hr = valHR.trim();
+        if (hr) await addMetric(user.uid, "heart_rate", "Nhịp tim", hr, "bpm", now);
+      } else {
+        await addMetric(user.uid, activeType, def.label, a, def.unit || undefined);
+      }
       setShowAdd(false);
     } catch (err) {
       console.error("[addMetric]", err);
       Alert.alert("Lỗi", "Không thể lưu chỉ số.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!user?.uid || !editEntry) return;
+    const a = editValA.trim();
+    const b = editValB.trim();
+    if (!a || !b) return;
+    setEditSaving(true);
+    try {
+      await updateMetric(editEntry.id, `${a}/${b}`);
+      const hr = editValHR.trim();
+      if (hr) {
+        if (editHrEntry) {
+          await updateMetric(editHrEntry.id, hr);
+        } else {
+          await addMetric(user.uid, "heart_rate", "Nhịp tim", hr, "bpm", editEntry.measuredAt);
+        }
+      }
+      setEditEntry(null);
+    } catch (err) {
+      console.error("[updateMetric]", err);
+      Alert.alert("Lỗi", "Không thể cập nhật chỉ số.");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -903,6 +1047,7 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
   };
 
   const showChart = chart && activeType === "blood_pressure" && bpPoints.length > 0;
+  const isBP = activeType === "blood_pressure";
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -923,7 +1068,7 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
             </Text>
           </View>
           <View className="flex-row gap-2 items-center">
-            {activeType === "blood_pressure" && entries.length > 1 && (
+            {isBP && entries.length > 1 && (
               <Segmented
                 value={chart ? "chart" : "list"}
                 onChange={(v) => setChart(v === "chart")}
@@ -948,17 +1093,26 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
           </>
         ) : (
           <View>
-            {entries.slice(0, 10).map((e) => (
-              <Pressable
-                key={e.id}
-                onLongPress={() => handleDelete(e)}
-                className="flex-row items-center py-2 border-b border-dashed border-line-soft"
-              >
-                <Text className="font-mono text-[11px] text-ink-3" style={{ width: 110 }}>{fmtTs(e.measuredAt)}</Text>
-                <Text className="flex-1 font-mono font-bold text-ink">{e.value}</Text>
-                <Text className="text-[10px] text-ink-3">{def.unit}</Text>
-              </Pressable>
-            ))}
+            {entries.slice(0, 10).map((e) => {
+              const hr = isBP ? findLinkedHR(e) : null;
+              return (
+                <Pressable
+                  key={e.id}
+                  onPress={isBP ? () => openEdit(e) : undefined}
+                  onLongPress={isBP ? undefined : () => handleDelete(e)}
+                  className="flex-row items-center py-2 border-b border-dashed border-line-soft"
+                >
+                  <Text className="font-mono text-[11px] text-ink-3" style={{ width: 100 }}>{fmtTs(e.measuredAt)}</Text>
+                  <View className="flex-1">
+                    <Text className="font-mono font-bold text-ink">{e.value} <Text className="font-mono text-[10px] text-ink-3">{def.unit}</Text></Text>
+                    {hr && <Text className="font-mono text-[11px] text-ink-3">{hr.value} bpm</Text>}
+                  </View>
+                  {isBP
+                    ? <Text className="text-[10px] text-accent-ink">Sửa ›</Text>
+                    : <Text className="text-[10px] text-ink-4">giữ xoá</Text>}
+                </Pressable>
+              );
+            })}
             {entries.length > 10 && (
               <Text className="text-[10px] text-ink-3 text-center mt-2">+{entries.length - 10} lần đo nữa</Text>
             )}
@@ -984,17 +1138,23 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
           />
           <View className="bg-paper rounded-t-2xl px-5 pt-5 pb-8 gap-4">
             <Text className="font-bold text-base text-ink">Thêm đo {def.label}</Text>
-            {def.dual ? (
-              <View className="flex-row gap-3">
-                <View className="flex-1">
-                  <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Tâm thu (mmHg)</Text>
-                  <Input value={valA} onChangeText={setValA} placeholder="VD: 120" keyboardType="numeric" returnKeyType="next" />
+            {isBP ? (
+              <>
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Tâm thu (mmHg)</Text>
+                    <Input value={valA} onChangeText={setValA} placeholder="VD: 120" keyboardType="numeric" returnKeyType="next" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Tâm trương (mmHg)</Text>
+                    <Input value={valB} onChangeText={setValB} placeholder="VD: 80" keyboardType="numeric" returnKeyType="next" />
+                  </View>
                 </View>
-                <View className="flex-1">
-                  <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Tâm trương (mmHg)</Text>
-                  <Input value={valB} onChangeText={setValB} placeholder="VD: 80" keyboardType="numeric" returnKeyType="done" onSubmitEditing={handleSave} />
+                <View>
+                  <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Nhịp tim (bpm)</Text>
+                  <Input value={valHR} onChangeText={setValHR} placeholder="VD: 72" keyboardType="numeric" returnKeyType="done" onSubmitEditing={handleSave} />
                 </View>
-              </View>
+              </>
             ) : (
               <View>
                 <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">
@@ -1004,8 +1164,50 @@ function MetricsTab({ onAdd }: { onAdd: () => void }) {
               </View>
             )}
             <View className="flex-row gap-3">
-              <Button variant="secondary" size="md" block onPress={() => setShowAdd(false)}>Huỷ</Button>
-              <Button variant="primary" size="md" block loading={saving} onPress={handleSave}>Lưu</Button>
+              <View className="flex-1">
+                <Button variant="secondary" block onPress={() => setShowAdd(false)}>Huỷ</Button>
+              </View>
+              <View className="flex-1">
+                <Button variant="primary" block loading={saving} onPress={handleSave}>Lưu</Button>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit BP+HR modal */}
+      <Modal visible={!!editEntry} animationType="slide" transparent onRequestClose={() => setEditEntry(null)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1, justifyContent: "flex-end" }}
+        >
+          <Pressable
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)" }}
+            onPress={() => setEditEntry(null)}
+          />
+          <View className="bg-paper rounded-t-2xl px-5 pt-5 pb-8 gap-4">
+            <Text className="font-bold text-base text-ink">Sửa lần đo</Text>
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Tâm thu (mmHg)</Text>
+                <Input value={editValA} onChangeText={setEditValA} placeholder="120" keyboardType="numeric" returnKeyType="next" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Tâm trương (mmHg)</Text>
+                <Input value={editValB} onChangeText={setEditValB} placeholder="80" keyboardType="numeric" returnKeyType="next" />
+              </View>
+            </View>
+            <View>
+              <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">Nhịp tim (bpm)</Text>
+              <Input value={editValHR} onChangeText={setEditValHR} placeholder="72" keyboardType="numeric" returnKeyType="done" onSubmitEditing={handleEditSave} />
+            </View>
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <Button variant="secondary" block onPress={() => setEditEntry(null)}>Huỷ</Button>
+              </View>
+              <View className="flex-1">
+                <Button variant="primary" block loading={editSaving} onPress={handleEditSave}>Lưu</Button>
+              </View>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -1029,12 +1231,14 @@ function reminderTime(hour: number, minute: number) {
 function RemindersTab() {
   const user = useAuthStore((s) => s.user);
   const [schedules, setSchedules] = useState<MedicationSchedule[]>([]);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [permGranted, setPermGranted] = useState<boolean | null>(null);
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
   const [draftHour, setDraftHour] = useState(8);
   const [draftMinute, setDraftMinute] = useState(0);
+  const [draftPrescriptionId, setDraftPrescriptionId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -1043,16 +1247,20 @@ function RemindersTab() {
 
   useEffect(() => {
     if (!user?.uid) return;
-    return subscribeToSchedules(user.uid, setSchedules);
+    const unsubSchedules = subscribeToSchedules(user.uid, setSchedules);
+    const unsubRx = subscribeToPrescriptions(user.uid, setPrescriptions);
+    return () => { unsubSchedules(); unsubRx(); };
   }, [user?.uid]);
 
   const openAdd = () => {
     setDraftLabel(""); setDraftHour(8); setDraftMinute(0);
+    setDraftPrescriptionId(prescriptions[0]?.id ?? null);
     setEditId(null); setAdding(true);
   };
 
   const openEdit = (s: MedicationSchedule) => {
     setDraftLabel(s.label); setDraftHour(s.hour); setDraftMinute(s.minute);
+    setDraftPrescriptionId(s.prescriptionId ?? null);
     setEditId(s.id); setAdding(true);
   };
 
@@ -1062,12 +1270,16 @@ function RemindersTab() {
     try {
       if (editId) {
         await updateSchedule(user.uid, editId, {
-          label: draftLabel.trim(), hour: draftHour, minute: draftMinute, enabled: true,
+          label: draftLabel.trim(), hour: draftHour, minute: draftMinute,
+          enabled: true, prescriptionId: draftPrescriptionId,
         });
       } else {
-        await addSchedule(user.uid, draftLabel.trim(), draftHour, draftMinute);
+        await addSchedule(user.uid, draftLabel.trim(), draftHour, draftMinute, draftPrescriptionId);
       }
       setAdding(false);
+    } catch (err) {
+      console.error("[saveSchedule]", err);
+      Alert.alert("Lỗi", "Không thể lưu lịch nhắc. Kiểm tra kết nối và thử lại.");
     } finally {
       setSaving(false);
     }
@@ -1075,19 +1287,35 @@ function RemindersTab() {
 
   const handleToggle = (s: MedicationSchedule) => {
     if (!user?.uid) return;
-    updateSchedule(user.uid, s.id, { enabled: !s.enabled });
+    updateSchedule(user.uid, s.id, { enabled: !s.enabled }).catch(console.error);
   };
 
   const handleDelete = (s: MedicationSchedule) => {
     if (!user?.uid) return;
     Alert.alert("Xoá lịch nhắc", `Xoá "${s.label}"?`, [
       { text: "Huỷ", style: "cancel" },
-      { text: "Xoá", style: "destructive", onPress: () => deleteSchedule(user.uid!, s.id) },
+      {
+        text: "Xoá", style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteSchedule(user.uid!, s.id);
+          } catch (err) {
+            console.error("[deleteSchedule]", err);
+            Alert.alert("Lỗi", "Không thể xoá lịch nhắc. Kiểm tra kết nối và thử lại.");
+          }
+        },
+      },
     ]);
   };
 
   const hourOptions = Array.from({ length: 24 }, (_, i) => i);
   const minuteOptions = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  const rxLabel = (id: string | null | undefined) => {
+    if (!id) return null;
+    const rx = prescriptions.find((p) => p.id === id);
+    return rx ? `Đơn ${new Date(rx.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}` : null;
+  };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -1116,6 +1344,9 @@ function RemindersTab() {
                   nhắc lúc {reminderTime(s.hour, s.minute)}
                 </Text>
               </Text>
+              {rxLabel(s.prescriptionId) && (
+                <Text className="text-[10px] text-ink-3">{rxLabel(s.prescriptionId)}</Text>
+              )}
             </View>
             <View className="flex-row items-center gap-3">
               <Pressable
@@ -1159,7 +1390,7 @@ function RemindersTab() {
             style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)" }}
             onPress={() => setAdding(false)}
           />
-          <View className="bg-paper rounded-t-2xl overflow-hidden" style={{ maxHeight: "80%" }}>
+          <View className="bg-paper rounded-t-2xl overflow-hidden" style={{ maxHeight: "85%" }}>
             <View className="flex-row justify-between items-center px-5 py-4 border-b border-line-soft">
               <Text className="font-bold text-base text-ink">
                 {editId ? "Sửa lịch nhắc" : "Thêm lịch nhắc"}
@@ -1220,6 +1451,46 @@ function RemindersTab() {
                 </View>
               </View>
 
+              {prescriptions.length > 0 && (
+                <View className="gap-1.5">
+                  <Text className="text-[10px] uppercase tracking-wider text-ink-3">Đơn thuốc liên kết</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View className="flex-row gap-2 pb-1">
+                      <Pressable
+                        onPress={() => setDraftPrescriptionId(null)}
+                        className={[
+                          "px-3 py-2 rounded-lg border",
+                          !draftPrescriptionId ? "bg-accent border-accent-ink" : "bg-paper-2 border-line-soft",
+                        ].join(" ")}
+                      >
+                        <Text className={["text-xs font-bold", !draftPrescriptionId ? "text-paper" : "text-ink-3"].join(" ")}>
+                          Không chọn
+                        </Text>
+                      </Pressable>
+                      {prescriptions.map((p) => (
+                        <Pressable
+                          key={p.id}
+                          onPress={() => setDraftPrescriptionId(p.id)}
+                          className={[
+                            "px-3 py-2 rounded-lg border",
+                            draftPrescriptionId === p.id ? "bg-accent border-accent-ink" : "bg-paper-2 border-line-soft",
+                          ].join(" ")}
+                        >
+                          <Text className={["text-xs font-bold", draftPrescriptionId === p.id ? "text-paper" : "text-ink"].join(" ")}>
+                            {new Date(p.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                          </Text>
+                          {p.note ? (
+                            <Text className={["text-[10px]", draftPrescriptionId === p.id ? "text-paper" : "text-ink-3"].join(" ")} numberOfLines={1}>
+                              {p.note}
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
+              )}
+
               <Card variant="accent" padding="sm">
                 <Text className="text-[11px] text-accent-ink text-center">
                   Thông báo sẽ xuất hiện lúc{" "}
@@ -1245,3 +1516,15 @@ function RemindersTab() {
     </ScrollView>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Devices tab — BLE scan for Garmin watches + link to Firestore my_data
+// ---------------------------------------------------------------------------
+
+function rssiBar(rssi: number): string {
+  if (rssi > -60) return "████";
+  if (rssi > -75) return "███░";
+  if (rssi > -85) return "██░░";
+  return "█░░░";
+}
+

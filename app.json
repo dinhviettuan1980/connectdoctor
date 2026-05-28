@@ -48,7 +48,9 @@
         {
           "icon": "./assets/icon.png",
           "color": "#5eb594",
-          "sounds": []
+          "sounds": [
+            "./assets/alarm.caf"
+          ]
         }
       ],
       [
@@ -61,6 +63,14 @@
         "expo-image-picker",
         {
           "photosPermission": "Cho phép ConnectDoctor truy cập ảnh để nhận dạng đơn thuốc/phiếu xét nghiệm."
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": ["central"],
+          "bluetoothAlwaysPermission": "ConnectDoctor cần Bluetooth để tìm thiết bị sức khoẻ đang kết nối."
         }
       ]
     ],
