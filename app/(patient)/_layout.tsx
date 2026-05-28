@@ -62,7 +62,9 @@ export default function PatientLayout() {
         name="health"
         options={{
           title: "Sức khoẻ",
-          tabBarIcon: ({ focused }) => <Icon label="SK" active={focused} />,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "heart" : "heart-outline"} size={22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
