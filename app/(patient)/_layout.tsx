@@ -59,6 +59,13 @@ export default function PatientLayout() {
         }}
       />
       <Tabs.Screen
+        name="health"
+        options={{
+          title: "Sức khoẻ",
+          tabBarIcon: ({ focused }) => <Icon label="SK" active={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Hồ sơ",
