@@ -1068,6 +1068,48 @@ function HealthTabBar({
 
 // ─── Steps helpers ────────────────────────────────────────────────────────────
 
+interface DailySteps {
+  date: string;
+  total: number;    // steps for that day
+  kcal: number;
+}
+
+// Hours when watch is typically not worn — exclude from step calculations
+function isActiveHour(ts: number): boolean {
+  const h = new Date(ts * 1000).getHours();
+  return h >= 7 && h < 20;
+}
+
+function computeDailyStepsFromHistory(historyAsc: HealthSyncRecord[]): DailySteps[] {
+  const byDate: Record<string, HealthSyncRecord[]> = {};
+  for (const r of historyAsc) {
+    if (!byDate[r.date]) byDate[r.date] = [];
+    byDate[r.date].push(r);
+  }
+
+  return Object.entries(byDate)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, recs]) => {
+      // steps is cumulative (resets at midnight). Strategy:
+      // 1. Take only active-hour records (7–20h) — watch is worn
+      // 2. Find the reset (steps→0), use records after it
+      // 3. Total = max cumulative value after reset = steps at ~20h
+      const activeRecs = recs.filter((r) => isActiveHour(r.ts));
+
+      // Find the last zero (midnight reset leaked into active window)
+      let lastZeroIdx = -1;
+      for (let i = 0; i < activeRecs.length; i++) {
+        if (activeRecs[i].steps === 0) lastZeroIdx = i;
+      }
+      const relevant = activeRecs.slice(lastZeroIdx + 1);
+
+      // Highest cumulative value seen = total steps for the day at last wear
+      const total = relevant.length ? Math.max(...relevant.map((r) => r.steps)) : 0;
+      const kcal = Math.max(...recs.map((r) => r.calories), 0);
+      return { date, total, kcal };
+    });
+}
+
 function arcPath(
   cx: number, cy: number, r: number,
   startDeg: number, endDeg: number,
@@ -1093,8 +1135,16 @@ function dayLabel(dateStr: string): string {
 }
 
 function computeHourlySteps(records: HealthSyncRecord[]): number[] {
+  // Only active hours (7–20), find reset, compute per-hour increments
+  const activeRecs = records.filter((r) => isActiveHour(r.ts));
+  let lastZeroIdx = -1;
+  for (let i = 0; i < activeRecs.length; i++) {
+    if (activeRecs[i].steps === 0) lastZeroIdx = i;
+  }
+  const recs = activeRecs.slice(lastZeroIdx + 1);
+
   const maxByHour: (number | null)[] = new Array(24).fill(null);
-  for (const r of records) {
+  for (const r of recs) {
     const h = new Date(r.ts * 1000).getHours();
     if (maxByHour[h] === null || r.steps > maxByHour[h]!) maxByHour[h] = r.steps;
   }
@@ -1111,12 +1161,12 @@ function computeHourlySteps(records: HealthSyncRecord[]): number[] {
 
 // ─── Steps Hero Card ──────────────────────────────────────────────────────────
 
-function StepsHeroCard({ daily }: { daily: HealthDailySummary[] }) {
-  const today = daily[0];
-  const steps = today?.total_steps ?? 0;
+function StepsHeroCard({ stepsData }: { stepsData: DailySteps[] }) {
+  const today = stepsData[stepsData.length - 1];
+  const steps = today?.total ?? 0;
   const goal = 10000;
   const pct = Math.min(1, steps / goal);
-  const kcal = today?.max_calories ?? Math.round(steps * 0.04);
+  const kcal = today?.kcal > 0 ? today.kcal : Math.round(steps * 0.04);
   const km = (steps * 0.00075).toFixed(1);
 
   const size = 160;
@@ -1208,7 +1258,7 @@ function StepsDayDetail({
   chartWidth,
   onClose,
 }: {
-  day: HealthDailySummary;
+  day: DailySteps;
   historyAsc: HealthSyncRecord[];
   chartWidth: number;
   onClose: () => void;
@@ -1216,7 +1266,7 @@ function StepsDayDetail({
   const dayRecords = historyAsc.filter((r) => r.date === day.date);
   const hourly = computeHourlySteps(dayRecords);
   const maxH = Math.max(...hourly, 1);
-  const steps = day.total_steps ?? 0;
+  const steps = day.total;
 
   const svgW = chartWidth - 32;
   const svgH = 120;
@@ -1319,17 +1369,17 @@ function StepsDayDetail({
 // ─── Steps Weekly Chart ───────────────────────────────────────────────────────
 
 function StepsWeeklyChart({
-  daily,
+  stepsData,
   historyAsc,
   chartWidth,
 }: {
-  daily: HealthDailySummary[];
+  stepsData: DailySteps[];
   historyAsc: HealthSyncRecord[];
   chartWidth: number;
 }) {
-  const [selectedDay, setSelectedDay] = useState<HealthDailySummary | null>(null);
+  const [selectedDay, setSelectedDay] = useState<DailySteps | null>(null);
 
-  const items = [...daily].reverse();
+  const items = stepsData;
   if (!items.length) {
     return (
       <DarkCard>
@@ -1339,7 +1389,7 @@ function StepsWeeklyChart({
     );
   }
 
-  const maxSteps = Math.max(...items.map((d) => d.total_steps ?? 0), 1);
+  const maxSteps = Math.max(...items.map((d) => d.total), 1);
   const barMaxH = 80;
   const svgW = chartWidth - 32;
   const svgH = barMaxH + 48;
@@ -1367,7 +1417,7 @@ function StepsWeeklyChart({
             })}
           </Defs>
           {items.map((d, i) => {
-            const s = d.total_steps ?? 0;
+            const s = d.total;
             const bh = s > 0 ? Math.max(4, (s / maxSteps) * barMaxH) : 4;
             const x = i * (barW + spacing);
             const y = barMaxH - bh;
@@ -1437,18 +1487,17 @@ function StepsWeeklyChart({
 // ─── Steps Dashboard ──────────────────────────────────────────────────────────
 
 function StepsDashboard({
-  daily,
   historyAsc,
   chartWidth,
 }: {
-  daily: HealthDailySummary[];
   historyAsc: HealthSyncRecord[];
   chartWidth: number;
 }) {
+  const stepsData = useMemo(() => computeDailyStepsFromHistory(historyAsc), [historyAsc]);
   return (
     <>
-      <StepsHeroCard daily={daily} />
-      <StepsWeeklyChart daily={daily} historyAsc={historyAsc} chartWidth={chartWidth} />
+      <StepsHeroCard stepsData={stepsData} />
+      <StepsWeeklyChart stepsData={stepsData} historyAsc={historyAsc} chartWidth={chartWidth} />
     </>
   );
 }
@@ -1592,7 +1641,6 @@ export default function Health() {
           </>
         ) : (
           <StepsDashboard
-            daily={daily}
             historyAsc={historyAsc}
             chartWidth={chartWidth}
           />
