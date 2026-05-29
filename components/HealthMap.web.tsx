@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { View, Text } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, ActivityIndicator } from "react-native";
 import type { LocationPoint } from "@/lib/locationApi";
 
 interface Props {
@@ -84,45 +84,59 @@ html,body,#map{margin:0;padding:0;width:100%;height:100%;background:#07080B}
 var map=L.map('map',{zoomControl:true,attributionControl:false}).setView([${currentPos[0]},${currentPos[1]}],15);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
 var pts=${latlngsJS};
-if(pts.length>=2){L.polyline(pts,{color:'#4ADE80',weight:3,opacity:0.9}).addTo(map);}
+if(pts.length>=2){L.polyline(pts,{color:'#4ADE80',weight:3,opacity:0.9}).addTo(map);map.fitBounds(L.polyline(pts).getBounds(),{padding:[30,30]});}
 ${clusterJS}
 var dotHtml='<div class="current-dot-wrap"><div class="current-dot-ring"></div><div class="current-dot-ring2"></div><div class="current-dot"></div></div>';
 var dotIcon=L.divIcon({html:dotHtml,className:'',iconSize:[20,20],iconAnchor:[10,10]});
 L.marker([${currentPos[0]},${currentPos[1]}],{icon:dotIcon}).addTo(map);
-if(pts.length>=2){map.fitBounds(L.polyline(pts).getBounds(),{padding:[30,30]});}
 </script>
 </body>
 </html>`;
 }
 
 export default function HealthMap({ points, height = 300 }: Props) {
-  const { html, hasData } = useMemo(() => {
-    if (points.length < 2) return { html: "", hasData: false };
+  const [livePos, setLivePos] = useState<[number, number] | null>(null);
+  const [locLoading, setLocLoading] = useState(true);
 
-    const sorted = [...points].sort((a, b) => b.ts - a.ts);
-    const currentPos: [number, number] = [sorted[0].lat, sorted[0].lng];
-    const clusters = clusterPoints(points);
+  useEffect(() => {
+    if (!navigator.geolocation) { setLocLoading(false); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLivePos([pos.coords.latitude, pos.coords.longitude]);
+        setLocLoading(false);
+      },
+      () => setLocLoading(false),
+      { timeout: 8000 },
+    );
+  }, []);
+
+  const { html, hasData } = useMemo(() => {
+    const sorted = points.length ? [...points].sort((a, b) => b.ts - a.ts) : null;
+    const currentPos: [number, number] | null =
+      livePos ?? (sorted ? [sorted[0].lat, sorted[0].lng] : null);
+
+    if (!currentPos) return { html: "", hasData: false };
+
+    const clusters = points.length ? clusterPoints(points) : [];
     return { html: buildLeafletHTML(points, clusters, currentPos), hasData: true };
-  }, [points]);
+  }, [points, livePos]);
+
+  if (locLoading) {
+    return (
+      <View style={{ height, borderRadius: 16, backgroundColor: "#0E1016", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
+        <ActivityIndicator color="#4ADE80" />
+        <Text style={{ color: "#5A5E6B", fontSize: 12, marginTop: 4 }}>Đang lấy vị trí…</Text>
+      </View>
+    );
+  }
 
   if (!hasData) {
     return (
-      <View
-        style={{
-          height,
-          borderRadius: 16,
-          backgroundColor: "#0E1016",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.08)",
-        }}
-      >
+      <View style={{ height, borderRadius: 16, backgroundColor: "#0E1016", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
         <Text style={{ fontSize: 28 }}>📍</Text>
-        <Text style={{ color: "#F4F5F8", fontSize: 14, fontWeight: "700" }}>Chưa có dữ liệu GPS</Text>
+        <Text style={{ color: "#F4F5F8", fontSize: 14, fontWeight: "700" }}>Không lấy được vị trí</Text>
         <Text style={{ color: "#5A5E6B", fontSize: 12, textAlign: "center", paddingHorizontal: 24 }}>
-          Vị trí sẽ tự động ghi khi bạn di chuyển
+          Vui lòng cho phép truy cập vị trí trong trình duyệt
         </Text>
       </View>
     );

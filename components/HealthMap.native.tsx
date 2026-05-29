@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { View, Text } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { View, Text, ActivityIndicator } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import MapView, { Polyline, Circle, Marker, PROVIDER_DEFAULT } from "react-native-maps";
+import * as Location from "expo-location";
 import type { LocationPoint } from "@/lib/locationApi";
 
 interface Props {
@@ -77,27 +78,19 @@ function PulsingDot() {
         style={[
           {
             position: "absolute",
-            width: 20,
-            height: 20,
-            borderRadius: 10,
+            width: 20, height: 20, borderRadius: 10,
             backgroundColor: "rgba(255,59,92,0.35)",
-            borderWidth: 1.5,
-            borderColor: "rgba(255,59,92,0.6)",
+            borderWidth: 1.5, borderColor: "rgba(255,59,92,0.6)",
           },
           ringStyle,
         ]}
       />
       <View
         style={{
-          width: 10,
-          height: 10,
-          borderRadius: 5,
+          width: 10, height: 10, borderRadius: 5,
           backgroundColor: "#FF3B5C",
-          borderWidth: 2,
-          borderColor: "white",
-          shadowColor: "#FF3B5C",
-          shadowOpacity: 0.8,
-          shadowRadius: 4,
+          borderWidth: 2, borderColor: "white",
+          shadowColor: "#FF3B5C", shadowOpacity: 0.8, shadowRadius: 4,
         }}
       />
     </View>
@@ -105,70 +98,91 @@ function PulsingDot() {
 }
 
 export default function HealthMap({ points, height = 300 }: Props) {
-  const { coords, clusters, region, currentPos } = useMemo(() => {
-    if (!points.length) return { coords: [], clusters: [], region: null, currentPos: null };
+  const [livePos, setLivePos] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locLoading, setLocLoading] = useState(true);
 
-    const lats = points.map((p) => p.lat);
-    const lngs = points.map((p) => p.lng);
+  useEffect(() => {
+    Location.getForegroundPermissionsAsync().then(({ status }) => {
+      if (status !== "granted") {
+        return Location.requestForegroundPermissionsAsync();
+      }
+      return { status };
+    }).then(({ status }) => {
+      if (status !== "granted") return;
+      return Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    }).then((loc) => {
+      if (loc) setLivePos({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+    }).catch(() => {}).finally(() => setLocLoading(false));
+  }, []);
+
+  const { coords, clusters, region, currentPos } = useMemo(() => {
+    const hasHistory = points.length > 0;
+
+    const lats = hasHistory ? points.map((p) => p.lat) : livePos ? [livePos.latitude] : [];
+    const lngs = hasHistory ? points.map((p) => p.lng) : livePos ? [livePos.longitude] : [];
+
+    if (!lats.length) return { coords: [], clusters: [], region: null, currentPos: livePos };
+
     const minLat = Math.min(...lats);
     const maxLat = Math.max(...lats);
     const minLng = Math.min(...lngs);
     const maxLng = Math.max(...lngs);
-    const pad = 0.002;
+    const pad = 0.003;
 
-    const sorted = [...points].sort((a, b) => b.ts - a.ts);
+    const sorted = hasHistory ? [...points].sort((a, b) => b.ts - a.ts) : null;
+    const cur = livePos ?? (sorted ? { latitude: sorted[0].lat, longitude: sorted[0].lng } : null);
 
     return {
-      coords: points,
-      clusters: clusterPoints(points),
-      currentPos: { latitude: sorted[0].lat, longitude: sorted[0].lng },
+      coords: hasHistory ? points : [],
+      clusters: hasHistory ? clusterPoints(points) : [],
+      currentPos: cur,
       region: {
-        latitude: (minLat + maxLat) / 2,
-        longitude: (minLng + maxLng) / 2,
-        latitudeDelta: Math.max(maxLat - minLat + pad, 0.005),
-        longitudeDelta: Math.max(maxLng - minLng + pad, 0.005),
+        latitude: cur?.latitude ?? (minLat + maxLat) / 2,
+        longitude: cur?.longitude ?? (minLng + maxLng) / 2,
+        latitudeDelta: Math.max(maxLat - minLat + pad, 0.008),
+        longitudeDelta: Math.max(maxLng - minLng + pad, 0.008),
       },
     };
-  }, [points]);
+  }, [points, livePos]);
 
-  if (!coords.length) {
+  if (locLoading) {
     return (
-      <View
-        style={{
-          height,
-          borderRadius: 16,
-          backgroundColor: "#0E1016",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.08)",
-        }}
-      >
+      <View style={{ height, borderRadius: 16, backgroundColor: "#0E1016", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
+        <ActivityIndicator color="#4ADE80" />
+        <Text style={{ color: "#5A5E6B", fontSize: 12, marginTop: 8 }}>Đang lấy vị trí…</Text>
+      </View>
+    );
+  }
+
+  if (!region) {
+    return (
+      <View style={{ height, borderRadius: 16, backgroundColor: "#0E1016", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
         <Text style={{ fontSize: 28 }}>📍</Text>
-        <Text style={{ color: "#F4F5F8", fontSize: 14, fontWeight: "700" }}>Chưa có dữ liệu GPS</Text>
+        <Text style={{ color: "#F4F5F8", fontSize: 14, fontWeight: "700" }}>Không lấy được vị trí</Text>
         <Text style={{ color: "#5A5E6B", fontSize: 12, textAlign: "center", paddingHorizontal: 24 }}>
-          Vị trí sẽ tự động ghi khi bạn di chuyển
+          Vui lòng cấp quyền vị trí cho ConnectDoctor
         </Text>
       </View>
     );
   }
 
-  const maxCount = Math.max(...clusters.map((c) => c.count), 1);
+  const maxCount = clusters.length ? Math.max(...clusters.map((c) => c.count), 1) : 1;
 
   return (
     <MapView
       style={{ height, borderRadius: 16, overflow: "hidden" }}
       provider={PROVIDER_DEFAULT}
-      region={region!}
+      region={region}
       pitchEnabled={false}
       rotateEnabled={false}
     >
-      <Polyline
-        coordinates={coords.map((p) => ({ latitude: p.lat, longitude: p.lng }))}
-        strokeColor="#4ADE80"
-        strokeWidth={3}
-      />
+      {coords.length >= 2 && (
+        <Polyline
+          coordinates={coords.map((p) => ({ latitude: p.lat, longitude: p.lng }))}
+          strokeColor="#4ADE80"
+          strokeWidth={3}
+        />
+      )}
 
       {clusters.map((c, i) => {
         const t = c.count / maxCount;
