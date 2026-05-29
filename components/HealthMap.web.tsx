@@ -1,28 +1,25 @@
 import { useMemo } from "react";
 import { View, Text } from "react-native";
-import type { HealthSyncRecord } from "@/lib/healthApi";
+import type { LocationPoint } from "@/lib/locationApi";
 
 interface Props {
-  records: HealthSyncRecord[];
+  points: LocationPoint[];
   height?: number;
 }
 
-function toLatLng(r: HealthSyncRecord): [number, number, number] | null {
-  const lat = (r.lat ?? 0) / 1_000_000;
-  const lng = (r.lng ?? 0) / 1_000_000;
-  return lat === 0 && lng === 0 ? null : [lat, lng, r.ts];
-}
-
-function distanceM(a: [number, number], b: [number, number]): number {
+function distanceM(a: LocationPoint, b: LocationPoint): number {
   const R = 6371000;
-  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
-  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
-  const s = Math.sin(dLat / 2) ** 2 +
-    Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) *
+      Math.cos((b.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
 }
 
-function clusterPoints(pts: [number, number][]): { lat: number; lng: number; count: number }[] {
+function clusterPoints(pts: LocationPoint[]): { lat: number; lng: number; count: number }[] {
   const clusters: { lat: number; lng: number; count: number }[] = [];
   const used = new Set<number>();
   for (let i = 0; i < pts.length; i++) {
@@ -36,8 +33,8 @@ function clusterPoints(pts: [number, number][]): { lat: number; lng: number; cou
       }
     }
     clusters.push({
-      lat: members.reduce((s, p) => s + p[0], 0) / members.length,
-      lng: members.reduce((s, p) => s + p[1], 0) / members.length,
+      lat: members.reduce((s, p) => s + p.lat, 0) / members.length,
+      lng: members.reduce((s, p) => s + p.lng, 0) / members.length,
       count: members.length,
     });
   }
@@ -45,20 +42,22 @@ function clusterPoints(pts: [number, number][]): { lat: number; lng: number; cou
 }
 
 function buildLeafletHTML(
-  points: [number, number][],
+  points: LocationPoint[],
   clusters: { lat: number; lng: number; count: number }[],
   currentPos: [number, number],
 ): string {
   const maxCount = Math.max(...clusters.map((c) => c.count), 1);
 
-  const clusterJS = clusters.map((c) => {
-    const t = c.count / maxCount;
-    const radius = 15 + t * 60;
-    const opacity = 0.15 + t * 0.55;
-    return `L.circle([${c.lat},${c.lng}],{radius:${radius.toFixed(1)},color:'rgba(74,222,128,${Math.min(1, opacity + 0.2).toFixed(2)})',fillColor:'rgba(74,222,128,${opacity.toFixed(2)})',fillOpacity:1,weight:1}).addTo(map);`;
-  }).join("\n");
+  const clusterJS = clusters
+    .map((c) => {
+      const t = c.count / maxCount;
+      const radius = 15 + t * 60;
+      const opacity = 0.15 + t * 0.55;
+      return `L.circle([${c.lat},${c.lng}],{radius:${radius.toFixed(1)},color:'rgba(74,222,128,${Math.min(1, opacity + 0.2).toFixed(2)})',fillColor:'rgba(74,222,128,${opacity.toFixed(2)})',fillOpacity:1,weight:1}).addTo(map);`;
+    })
+    .join("\n");
 
-  const latlngsJS = `[${points.map(([a, b]) => `[${a},${b}]`).join(",")}]`;
+  const latlngsJS = `[${points.map((p) => `[${p.lat},${p.lng}]`).join(",")}]`;
 
   return `<!DOCTYPE html>
 <html>
@@ -85,42 +84,45 @@ html,body,#map{margin:0;padding:0;width:100%;height:100%;background:#07080B}
 var map=L.map('map',{zoomControl:true,attributionControl:false}).setView([${currentPos[0]},${currentPos[1]}],15);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
 var pts=${latlngsJS};
-L.polyline(pts,{color:'#4ADE80',weight:3,opacity:0.9}).addTo(map);
+if(pts.length>=2){L.polyline(pts,{color:'#4ADE80',weight:3,opacity:0.9}).addTo(map);}
 ${clusterJS}
 var dotHtml='<div class="current-dot-wrap"><div class="current-dot-ring"></div><div class="current-dot-ring2"></div><div class="current-dot"></div></div>';
 var dotIcon=L.divIcon({html:dotHtml,className:'',iconSize:[20,20],iconAnchor:[10,10]});
 L.marker([${currentPos[0]},${currentPos[1]}],{icon:dotIcon}).addTo(map);
-map.fitBounds(L.polyline(pts).getBounds(),{padding:[30,30]});
+if(pts.length>=2){map.fitBounds(L.polyline(pts).getBounds(),{padding:[30,30]});}
 </script>
 </body>
 </html>`;
 }
 
-export default function HealthMap({ records, height = 300 }: Props) {
+export default function HealthMap({ points, height = 300 }: Props) {
   const { html, hasData } = useMemo(() => {
-    const raw = records.map(toLatLng).filter(Boolean) as [number, number, number][];
-    if (raw.length < 2) return { html: "", hasData: false };
+    if (points.length < 2) return { html: "", hasData: false };
 
-    const points: [number, number][] = raw.map(([lat, lng]) => [lat, lng]);
-    const sorted = [...raw].sort((a, b) => b[2] - a[2]);
-    const currentPos: [number, number] = [sorted[0][0], sorted[0][1]];
+    const sorted = [...points].sort((a, b) => b.ts - a.ts);
+    const currentPos: [number, number] = [sorted[0].lat, sorted[0].lng];
     const clusters = clusterPoints(points);
     return { html: buildLeafletHTML(points, clusters, currentPos), hasData: true };
-  }, [records]);
+  }, [points]);
 
   if (!hasData) {
     return (
-      <View style={{
-        height, borderRadius: 16, backgroundColor: "#0E1016",
-        alignItems: "center", justifyContent: "center", gap: 8,
-        borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
-      }}>
+      <View
+        style={{
+          height,
+          borderRadius: 16,
+          backgroundColor: "#0E1016",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.08)",
+        }}
+      >
         <Text style={{ fontSize: 28 }}>📍</Text>
-        <Text style={{ color: "#F4F5F8", fontSize: 14, fontWeight: "700" }}>
-          Chưa có dữ liệu GPS
-        </Text>
+        <Text style={{ color: "#F4F5F8", fontSize: 14, fontWeight: "700" }}>Chưa có dữ liệu GPS</Text>
         <Text style={{ color: "#5A5E6B", fontSize: 12, textAlign: "center", paddingHorizontal: 24 }}>
-          Dữ liệu vị trí sẽ hiển thị khi đồng hồ đồng bộ GPS
+          Vị trí sẽ tự động ghi khi bạn di chuyển
         </Text>
       </View>
     );

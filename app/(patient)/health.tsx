@@ -38,6 +38,7 @@ import {
   type HealthDailySummary,
 } from "@/lib/healthApi";
 import HealthMap from "@/components/HealthMap";
+import { fetchLocationHistory } from "@/lib/locationApi";
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1534,6 +1535,18 @@ export default function Health() {
     enabled: !!device,
   });
 
+  const todayDate = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+
+  const { data: locationPoints = [] } = useQuery({
+    queryKey: ["location-today", user?.uid, todayDate],
+    queryFn: () => fetchLocationHistory(user!.uid, todayDate),
+    enabled: !!user?.uid && activeTab === "map",
+    refetchInterval: 5 * 60 * 1000,
+  });
+
   const historyAsc = useMemo(() => [...historyDesc].reverse(), [historyDesc]);
 
   const filtered = useMemo(() => {
@@ -1642,7 +1655,7 @@ export default function Health() {
             <WeeklyBars daily={daily} chartWidth={chartWidth} />
           </>
         ) : activeTab === "map" ? (
-          <HealthMap records={historyAsc} height={420} />
+          <HealthMap points={locationPoints} height={420} />
         ) : (
           <StepsDashboard
             historyAsc={historyAsc}

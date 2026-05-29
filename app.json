@@ -19,7 +19,11 @@
       "infoPlist": {
         "NSCameraUsageDescription": "ConnectDoctor cần truy cập camera để chụp đơn thuốc và phiếu xét nghiệm.",
         "NSPhotoLibraryUsageDescription": "ConnectDoctor cần truy cập thư viện ảnh để nhận dạng đơn thuốc và phiếu xét nghiệm.",
-        "NSMicrophoneUsageDescription": "ConnectDoctor cần microphone cho cuộc gọi với bác sỹ."
+        "NSMicrophoneUsageDescription": "ConnectDoctor cần microphone cho cuộc gọi với bác sỹ.",
+        "NSLocationWhenInUseUsageDescription": "ConnectDoctor ghi lại lịch sử di chuyển của bạn để hiển thị trên bản đồ sức khoẻ.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ConnectDoctor cần vị trí nền để ghi lịch sử di chuyển khi app đóng.",
+        "NSLocationAlwaysUsageDescription": "ConnectDoctor cần vị trí nền để ghi lịch sử di chuyển khi app đóng.",
+        "UIBackgroundModes": ["location", "fetch"]
       },
       "appleTeamId": "GXSFH7K2X5"
     },
@@ -33,7 +37,12 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -63,6 +72,16 @@
         "expo-image-picker",
         {
           "photosPermission": "Cho phép ConnectDoctor truy cập ảnh để nhận dạng đơn thuốc/phiếu xét nghiệm."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "ConnectDoctor cần vị trí nền để ghi lịch sử di chuyển.",
+          "locationAlwaysPermission": "ConnectDoctor cần vị trí nền để ghi lịch sử di chuyển.",
+          "locationWhenInUsePermission": "ConnectDoctor ghi lại lịch sử di chuyển để hiển thị trên bản đồ sức khoẻ.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
         }
       ],
       [

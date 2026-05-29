@@ -1,4 +1,5 @@
 import "@/global.css";
+import "@/lib/locationTracking"; // registers the background task at module load
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
@@ -14,6 +15,7 @@ import { registerPushToken, getNotificationResponse, addNotificationListener } f
 import { loadOrInitUserDoc } from "@/lib/auth";
 import { linkPendingAndNotify } from "@/hooks/useGoogleSignIn";
 import { setPendingCredential } from "@/lib/pendingCredential";
+import { startLocationTracking, stopLocationTracking } from "@/lib/locationTracking";
 
 const queryClient = new QueryClient();
 
@@ -57,10 +59,12 @@ function AuthGate() {
     if (!user) {
       notifListenerRef.current?.();
       notifListenerRef.current = null;
+      stopLocationTracking();
       return;
     }
 
     registerPushToken(user.uid);
+    startLocationTracking(user.uid);
 
     // Handle tap on notification that opened the app from killed state
     getNotificationResponse().then((response) => {
