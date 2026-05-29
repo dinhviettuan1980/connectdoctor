@@ -1,5 +1,4 @@
 import "@/global.css";
-import "@/lib/locationTracking"; // registers the background task at module load
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
