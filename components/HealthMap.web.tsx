@@ -100,13 +100,14 @@ export default function HealthMap({ points, height = 300 }: Props) {
 
   useEffect(() => {
     if (!navigator.geolocation) { setLocLoading(false); return; }
+    // maximumAge: accept cached position up to 60s old — instant return
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLivePos([pos.coords.latitude, pos.coords.longitude]);
         setLocLoading(false);
       },
       () => setLocLoading(false),
-      { timeout: 8000 },
+      { timeout: 5000, maximumAge: 60000, enableHighAccuracy: false },
     );
   }, []);
 

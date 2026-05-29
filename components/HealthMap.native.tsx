@@ -102,17 +102,24 @@ export default function HealthMap({ points, height = 300 }: Props) {
   const [locLoading, setLocLoading] = useState(true);
 
   useEffect(() => {
-    Location.getForegroundPermissionsAsync().then(({ status }) => {
+    async function init() {
+      const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== "granted") {
-        return Location.requestForegroundPermissionsAsync();
+        const { status: s2 } = await Location.requestForegroundPermissionsAsync();
+        if (s2 !== "granted") { setLocLoading(false); return; }
       }
-      return { status };
-    }).then(({ status }) => {
-      if (status !== "granted") return;
-      return Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    }).then((loc) => {
-      if (loc) setLivePos({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-    }).catch(() => {}).finally(() => setLocLoading(false));
+      // Use cached last-known position instantly (no GPS hardware wait)
+      const last = await Location.getLastKnownPositionAsync();
+      if (last) {
+        setLivePos({ latitude: last.coords.latitude, longitude: last.coords.longitude });
+        setLocLoading(false);
+      }
+      // Refine with fresh coarse fix (WiFi/cell, ~0.5 s) in background
+      const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Lowest });
+      setLivePos({ latitude: fresh.coords.latitude, longitude: fresh.coords.longitude });
+      if (!last) setLocLoading(false);
+    }
+    init().catch(() => setLocLoading(false));
   }, []);
 
   const { coords, clusters, region, currentPos } = useMemo(() => {
