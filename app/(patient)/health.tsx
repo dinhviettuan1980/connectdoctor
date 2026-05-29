@@ -37,6 +37,7 @@ import {
   type HealthSyncRecord,
   type HealthDailySummary,
 } from "@/lib/healthApi";
+import HealthMap from "@/components/HealthMap";
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1015,12 +1016,20 @@ function WeeklyBars({
 
 // ─── Tab Bar ─────────────────────────────────────────────────────────────────
 
+type HealthTab = "hr" | "steps" | "map";
+
+const TAB_CONFIG: { key: HealthTab; label: string; activeColor: string; activeBorder: string }[] = [
+  { key: "hr",    label: "❤️  Nhịp tim",  activeColor: "#FF3B5C", activeBorder: "rgba(255,59,92,0.35)" },
+  { key: "steps", label: "👣  Bước chân", activeColor: "#4ADE80", activeBorder: "rgba(74,222,128,0.35)" },
+  { key: "map",   label: "📍  Bản đồ",    activeColor: "#5BB4FF", activeBorder: "rgba(91,180,255,0.35)" },
+];
+
 function HealthTabBar({
   active,
   onChange,
 }: {
-  active: "hr" | "steps";
-  onChange: (t: "hr" | "steps") => void;
+  active: HealthTab;
+  onChange: (t: HealthTab) => void;
 }) {
   return (
     <View
@@ -1033,12 +1042,12 @@ function HealthTabBar({
         borderColor: C.line,
       }}
     >
-      {(["hr", "steps"] as const).map((t) => {
-        const on = active === t;
+      {TAB_CONFIG.map(({ key, label, activeColor, activeBorder }) => {
+        const on = active === key;
         return (
           <TouchableOpacity
-            key={t}
-            onPress={() => onChange(t)}
+            key={key}
+            onPress={() => onChange(key)}
             style={{
               flex: 1,
               paddingVertical: 8,
@@ -1046,18 +1055,11 @@ function HealthTabBar({
               alignItems: "center",
               backgroundColor: on ? C.bg1 : "transparent",
               borderWidth: on ? 1 : 0,
-              borderColor: on ? (t === "hr" ? "rgba(255,59,92,0.35)" : "rgba(74,222,128,0.35)") : "transparent",
+              borderColor: on ? activeBorder : "transparent",
             }}
           >
-            <Text
-              style={{
-                color: on ? (t === "hr" ? C.hr : C.green) : C.ink3,
-                fontSize: 12,
-                fontWeight: "700",
-                letterSpacing: 0.3,
-              }}
-            >
-              {t === "hr" ? "❤️  Nhịp tim" : "👣  Bước chân"}
+            <Text style={{ color: on ? activeColor : C.ink3, fontSize: 11, fontWeight: "700", letterSpacing: 0.2 }}>
+              {label}
             </Text>
           </TouchableOpacity>
         );
@@ -1508,7 +1510,7 @@ export default function Health() {
   const { width } = useWindowDimensions();
   const chartWidth = width - 32;
   const [range, setRange] = useState<Range>("24H");
-  const [activeTab, setActiveTab] = useState<"hr" | "steps">("hr");
+  const [activeTab, setActiveTab] = useState<HealthTab>("hr");
   const user = useAuthStore((s) => s.user);
 
   const { data: devices, isLoading: loadingDevices, isError: devError } = useQuery({
@@ -1639,6 +1641,8 @@ export default function Health() {
             {/* Weekly Bars */}
             <WeeklyBars daily={daily} chartWidth={chartWidth} />
           </>
+        ) : activeTab === "map" ? (
+          <HealthMap records={historyAsc} height={420} />
         ) : (
           <StepsDashboard
             historyAsc={historyAsc}

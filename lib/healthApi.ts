@@ -19,6 +19,15 @@ export type HealthSyncRecord = {
   stress: number;
   resp_rate: number;
   created_at: string;
+  // GPS fields (added later — may be absent or 0)
+  lat?: number;          // latitude × 1,000,000
+  lng?: number;          // longitude × 1,000,000
+  altitude?: number;     // metres
+  speed_kmh?: number;
+  distance_m?: number;
+  floors_down?: number;
+  active_min?: number;
+  battery?: number;
 };
 
 export type HealthAlertRecord = {
