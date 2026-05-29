@@ -1,13 +1,19 @@
 import "@/global.css";
 import { useEffect, useRef } from "react";
+import { Platform } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, ActivityIndicator } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { getRedirectResult, FacebookAuthProvider } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { useAuthStore, initAuthListener } from "@/hooks/useAuth";
 import { registerPushToken, getNotificationResponse, addNotificationListener } from "@/lib/notifications";
+import { loadOrInitUserDoc } from "@/lib/auth";
+import { linkPendingAndNotify } from "@/hooks/useGoogleSignIn";
+import { setPendingCredential } from "@/lib/pendingCredential";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +34,22 @@ function AuthGate() {
 
   useEffect(() => {
     return initAuthListener();
+  }, []);
+
+  // Handle OAuth redirect result on web (Google/Facebook redirect flow)
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    getRedirectResult(auth).then(async (result) => {
+      if (!result) return;
+      await linkPendingAndNotify(result.user, async (fbUser) => {
+        await loadOrInitUserDoc(fbUser);
+      });
+    }).catch((e) => {
+      if (e?.code === "auth/account-exists-with-different-credential") {
+        const pendingCred = FacebookAuthProvider.credentialFromError(e);
+        if (pendingCred) setPendingCredential(pendingCred);
+      }
+    });
   }, []);
 
   // Register push token and handle notification taps after login
