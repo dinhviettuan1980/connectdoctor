@@ -25,6 +25,7 @@ export interface PatientProfile {
   conditions: string[];
   allergies: string[];
   linkedDeviceIds?: string[];  // Firestore my_data document IDs e.g. ["006-B4024-00"]
+  homeAddress?: { label: string; lat: number; lng: number };
 }
 
 export interface Medication {

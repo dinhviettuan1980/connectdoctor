@@ -294,6 +294,11 @@ function InfoTab() {
   const [discovered, setDiscovered] = useState<HealthDevice[]>([]);
   const [scanDone, setScanDone] = useState(false);
   const stopScanRef = useRef<(() => void) | null>(null);
+  // Home address
+  const [showHomePicker, setShowHomePicker] = useState(false);
+  const [homeQuery, setHomeQuery] = useState("");
+  const [homeResults, setHomeResults] = useState<Array<{ display_name: string; lat: string; lon: string }>>([]);
+  const [homeSearching, setHomeSearching] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -324,6 +329,49 @@ function InfoTab() {
     if (!dev.firestoreId) return;
     const next = [...new Set([...linkedIds, dev.firestoreId])];
     save({ linkedDeviceIds: next });
+  };
+
+  const searchHome = async () => {
+    const q = homeQuery.trim();
+    if (!q) return;
+    setHomeSearching(true);
+    setHomeResults([]);
+    try {
+      const fetchNominatim = async (query: string) => {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=vi`,
+          { headers: { "User-Agent": "ConnectDoctor/1.0" } },
+        );
+        return res.json() as Promise<Array<{ display_name: string; lat: string; lon: string; place_id: string }>>;
+      };
+
+      let results = await fetchNominatim(q);
+
+      if (results.length === 0) {
+        // Vietnamese alley pattern: "3/59/43 Chùa Bộc" → strip "3/59/43 " → "Chùa Bộc"
+        const streetOnly = q.replace(/^(\d+[/\-])+\d*\s+/, "").trim();
+        if (streetOnly && streetOnly !== q) {
+          // Detect the stripped prefix to prepend to display_name for clarity
+          const prefix = q.slice(0, q.length - streetOnly.length).trim();
+          const fallback = await fetchNominatim(streetOnly);
+          results = fallback.map((item) => ({
+            ...item,
+            display_name: prefix ? `${prefix} ${item.display_name}` : item.display_name,
+          }));
+        }
+      }
+
+      setHomeResults(results);
+    } catch { } finally {
+      setHomeSearching(false);
+    }
+  };
+
+  const selectHome = (item: { display_name: string; lat: string; lon: string }) => {
+    save({ homeAddress: { label: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon) } });
+    setShowHomePicker(false);
+    setHomeQuery("");
+    setHomeResults([]);
   };
 
   const handleRemoveDevice = (deviceId: string) => {
@@ -453,6 +501,30 @@ function InfoTab() {
         )}
       </Section>
 
+      {/* Home address */}
+      <Section
+        title="ĐỊA CHỈ NHÀ"
+        action={
+          <Pressable onPress={() => setShowHomePicker(true)} hitSlop={8}>
+            <Text className="text-[11px] text-accent-ink">{profile.homeAddress ? "Sửa" : "Thêm"}</Text>
+          </Pressable>
+        }
+      >
+        {profile.homeAddress ? (
+          <View className="flex-row items-start gap-2">
+            <Text className="text-base">🏠</Text>
+            <View className="flex-1">
+              <Text className="text-xs text-ink" numberOfLines={2}>{profile.homeAddress.label}</Text>
+              <Text className="font-mono text-[10px] text-ink-3 mt-0.5">
+                {profile.homeAddress.lat.toFixed(5)}, {profile.homeAddress.lng.toFixed(5)}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <Text className="text-[11px] text-ink-3">Chưa đặt. Nhấn Thêm để tìm địa chỉ.</Text>
+        )}
+      </Section>
+
       {/* Devices */}
       <Section
         title="THIẾT BỊ SỨC KHOẺ"
@@ -507,6 +579,64 @@ function InfoTab() {
           <Text className="text-[11px] text-ink-3 mt-1">Không tìm thấy thiết bị Garmin nào.</Text>
         )}
       </Section>
+
+      {/* Home address picker modal */}
+      <Modal visible={showHomePicker} animationType="slide" onRequestClose={() => setShowHomePicker(false)}>
+        <SafeAreaView className="flex-1 bg-paper">
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+            <View className="flex-row items-center justify-between px-4 py-3 border-b border-line-soft">
+              <Text className="font-bold text-base text-ink">Chọn địa chỉ nhà</Text>
+              <Pressable onPress={() => setShowHomePicker(false)} hitSlop={12}>
+                <Text className="text-ink-2 text-base">✕ Đóng</Text>
+              </Pressable>
+            </View>
+            <View className="flex-row gap-2 px-4 py-3">
+              <TextInput
+                value={homeQuery}
+                onChangeText={setHomeQuery}
+                onSubmitEditing={searchHome}
+                placeholder="Nhập địa chỉ nhà…"
+                placeholderTextColor="#b5b5b5"
+                returnKeyType="search"
+                style={{ flex: 1, borderWidth: 1, borderColor: "#c8c8c2", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: "#1a1a1a" }}
+                autoFocus
+              />
+              <Pressable
+                onPress={searchHome}
+                style={{ backgroundColor: "#5eb594", borderRadius: 8, paddingHorizontal: 16, justifyContent: "center" }}
+              >
+                {homeSearching
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Tìm</Text>
+                }
+              </Pressable>
+            </View>
+            <FlatList
+              data={homeResults}
+              keyExtractor={(_, i) => String(i)}
+              contentContainerStyle={{ paddingHorizontal: 16, gap: 0 }}
+              ListEmptyComponent={
+                !homeSearching ? (
+                  <Text className="text-[11px] text-ink-3 text-center mt-8">
+                    {homeQuery ? "Không tìm thấy kết quả" : "Nhập địa chỉ và nhấn Tìm"}
+                  </Text>
+                ) : null
+              }
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => selectHome(item)}
+                  className="py-3 border-b border-line-soft"
+                >
+                  <Text className="text-sm text-ink" numberOfLines={2}>{item.display_name}</Text>
+                  <Text className="font-mono text-[10px] text-ink-3 mt-0.5">
+                    {parseFloat(item.lat).toFixed(5)}, {parseFloat(item.lon).toFixed(5)}
+                  </Text>
+                </Pressable>
+              )}
+            />
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Single-select pickers */}
       <PickerSheet

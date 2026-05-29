@@ -39,6 +39,8 @@ import {
 } from "@/lib/healthApi";
 import HealthMap from "@/components/HealthMap";
 import { fetchLocationHistory } from "@/lib/locationApi";
+import { getPatientProfile } from "@/lib/patientProfile";
+import type { PatientProfile } from "@/lib/types";
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1564,6 +1566,12 @@ export default function Health() {
   const latest = historyDesc[0];
   const liveBpm = latest?.hr ?? 0;
 
+  const [homeAddress, setHomeAddress] = useState<PatientProfile["homeAddress"]>(undefined);
+  useEffect(() => {
+    if (!user?.uid) return;
+    getPatientProfile(user.uid).then((p) => { if (p?.homeAddress) setHomeAddress(p.homeAddress); });
+  }, [user?.uid]);
+
   const [liveTime, setLiveTime] = useState(nowHM());
   useEffect(() => {
     const id = setInterval(() => setLiveTime(nowHM()), 30000);
@@ -1655,7 +1663,7 @@ export default function Health() {
             <WeeklyBars daily={daily} chartWidth={chartWidth} />
           </>
         ) : activeTab === "map" ? (
-          <HealthMap points={locationPoints} height={420} />
+          <HealthMap points={locationPoints} height={420} homeAddress={homeAddress} />
         ) : (
           <StepsDashboard
             historyAsc={historyAsc}

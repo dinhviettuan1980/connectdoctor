@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator, Pressable, Linking } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -11,9 +11,12 @@ import MapView, { Polyline, Circle, Marker, PROVIDER_DEFAULT } from "react-nativ
 import * as Location from "expo-location";
 import type { LocationPoint } from "@/lib/locationApi";
 
+interface HomeAddress { label: string; lat: number; lng: number }
+
 interface Props {
   points: LocationPoint[];
   height?: number;
+  homeAddress?: HomeAddress;
 }
 
 function distanceM(a: LocationPoint, b: LocationPoint): number {
@@ -97,9 +100,11 @@ function PulsingDot() {
   );
 }
 
-export default function HealthMap({ points, height = 300 }: Props) {
+export default function HealthMap({ points, height = 300, homeAddress }: Props) {
   const [livePos, setLivePos] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locLoading, setLocLoading] = useState(true);
+  const [route, setRoute] = useState<{ latitude: number; longitude: number }[] | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -121,6 +126,21 @@ export default function HealthMap({ points, height = 300 }: Props) {
     }
     init().catch(() => setLocLoading(false));
   }, []);
+
+  const goHome = async () => {
+    if (!homeAddress || !livePos) return;
+    setRouteLoading(true);
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${livePos.longitude},${livePos.latitude};${homeAddress.lng},${homeAddress.lat}?overview=full&geometries=geojson`;
+      const data = await (await fetch(url)).json();
+      const coords = data.routes?.[0]?.geometry?.coordinates;
+      if (coords) {
+        setRoute(coords.map(([lng, lat]: [number, number]) => ({ latitude: lat, longitude: lng })));
+      }
+    } catch { } finally {
+      setRouteLoading(false);
+    }
+  };
 
   const { coords, clusters, region, currentPos } = useMemo(() => {
     const hasHistory = points.length > 0;
@@ -176,40 +196,84 @@ export default function HealthMap({ points, height = 300 }: Props) {
   const maxCount = clusters.length ? Math.max(...clusters.map((c) => c.count), 1) : 1;
 
   return (
-    <MapView
-      style={{ height, borderRadius: 16, overflow: "hidden" }}
-      provider={PROVIDER_DEFAULT}
-      region={region}
-      pitchEnabled={false}
-      rotateEnabled={false}
-    >
-      {coords.length >= 2 && (
-        <Polyline
-          coordinates={coords.map((p) => ({ latitude: p.lat, longitude: p.lng }))}
-          strokeColor="#4ADE80"
-          strokeWidth={3}
-        />
-      )}
-
-      {clusters.map((c, i) => {
-        const t = c.count / maxCount;
-        return (
-          <Circle
-            key={i}
-            center={{ latitude: c.latitude, longitude: c.longitude }}
-            radius={15 + t * 60}
-            fillColor={`rgba(74,222,128,${(0.15 + t * 0.55).toFixed(2)})`}
-            strokeColor={`rgba(74,222,128,${Math.min(1, 0.35 + t * 0.55).toFixed(2)})`}
-            strokeWidth={1}
+    <View style={{ borderRadius: 16, overflow: "hidden" }}>
+      <MapView
+        style={{ height, borderRadius: 16, overflow: "hidden" }}
+        provider={PROVIDER_DEFAULT}
+        region={region}
+        pitchEnabled={false}
+        rotateEnabled={false}
+      >
+        {coords.length >= 2 && (
+          <Polyline
+            coordinates={coords.map((p) => ({ latitude: p.lat, longitude: p.lng }))}
+            strokeColor="#4ADE80"
+            strokeWidth={3}
           />
-        );
-      })}
+        )}
 
-      {currentPos && (
-        <Marker coordinate={currentPos} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-          <PulsingDot />
-        </Marker>
+        {route && route.length >= 2 && (
+          <Polyline
+            coordinates={route}
+            strokeColor="#5BB4FF"
+            strokeWidth={5}
+            lineDashPattern={[10, 6]}
+          />
+        )}
+
+        {clusters.map((c, i) => {
+          const t = c.count / maxCount;
+          return (
+            <Circle
+              key={i}
+              center={{ latitude: c.latitude, longitude: c.longitude }}
+              radius={15 + t * 60}
+              fillColor={`rgba(74,222,128,${(0.15 + t * 0.55).toFixed(2)})`}
+              strokeColor={`rgba(74,222,128,${Math.min(1, 0.35 + t * 0.55).toFixed(2)})`}
+              strokeWidth={1}
+            />
+          );
+        })}
+
+        {homeAddress && (
+          <Marker
+            coordinate={{ latitude: homeAddress.lat, longitude: homeAddress.lng }}
+            anchor={{ x: 0.5, y: 1 }}
+            tracksViewChanges={false}
+          >
+            <Text style={{ fontSize: 22 }}>🏠</Text>
+          </Marker>
+        )}
+
+        {currentPos && (
+          <Marker coordinate={currentPos} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+            <PulsingDot />
+          </Marker>
+        )}
+      </MapView>
+
+      {homeAddress && (
+        <View style={{ flexDirection: "row", gap: 8, padding: 10, backgroundColor: "#0E1016", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" }}>
+          <Pressable
+            onPress={route ? () => setRoute(null) : goHome}
+            disabled={routeLoading}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: route ? "rgba(91,180,255,0.15)" : "rgba(255,255,255,0.06)", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: route ? "rgba(91,180,255,0.4)" : "rgba(255,255,255,0.12)" }}
+          >
+            {routeLoading
+              ? <ActivityIndicator size="small" color="#5BB4FF" />
+              : <Text style={{ fontSize: 14 }}>{route ? "✕" : "🏠"}</Text>
+            }
+            <Text style={{ color: route ? "#5BB4FF" : "#C7CAD3", fontSize: 12, fontWeight: "700" }}>
+              {routeLoading ? "Đang tính…" : route ? "Xoá đường đi" : "Về nhà"}
+            </Text>
+          </Pressable>
+          {route && (
+            <View style={{ flex: 1, justifyContent: "center" }}>
+              <Text style={{ color: "#5A5E6B", fontSize: 11 }} numberOfLines={1}>→ {homeAddress.label}</Text>
+            </View>
+          )}
+        </View>
       )}
-    </MapView>
+    </View>
   );
 }

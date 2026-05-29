@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator, Pressable } from "react-native";
 import type { LocationPoint } from "@/lib/locationApi";
+
+interface HomeAddress { label: string; lat: number; lng: number }
 
 interface Props {
   points: LocationPoint[];
   height?: number;
+  homeAddress?: HomeAddress;
 }
 
 function distanceM(a: LocationPoint, b: LocationPoint): number {
@@ -45,6 +48,8 @@ function buildLeafletHTML(
   points: LocationPoint[],
   clusters: { lat: number; lng: number; count: number }[],
   currentPos: [number, number],
+  homeAddress?: HomeAddress,
+  route?: [number, number][],
 ): string {
   const maxCount = Math.max(...clusters.map((c) => c.count), 1);
 
@@ -58,6 +63,14 @@ function buildLeafletHTML(
     .join("\n");
 
   const latlngsJS = `[${points.map((p) => `[${p.lat},${p.lng}]`).join(",")}]`;
+
+  const homeJS = homeAddress
+    ? `var homeIcon=L.divIcon({html:'<div style="font-size:22px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))">🏠</div>',className:'',iconSize:[24,24],iconAnchor:[12,24]});L.marker([${homeAddress.lat},${homeAddress.lng}],{icon:homeIcon}).addTo(map);`
+    : "";
+
+  const routeJS = route && route.length >= 2
+    ? `L.polyline(${JSON.stringify(route)},{color:'#5BB4FF',weight:5,opacity:0.85,dashArray:'10,6'}).addTo(map);map.fitBounds(L.polyline(${JSON.stringify(route)}).getBounds(),{padding:[40,40]});`
+    : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -86,6 +99,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).a
 var pts=${latlngsJS};
 if(pts.length>=2){L.polyline(pts,{color:'#4ADE80',weight:3,opacity:0.9}).addTo(map);map.fitBounds(L.polyline(pts).getBounds(),{padding:[30,30]});}
 ${clusterJS}
+${homeJS}
+${routeJS}
 var dotHtml='<div class="current-dot-wrap"><div class="current-dot-ring"></div><div class="current-dot-ring2"></div><div class="current-dot"></div></div>';
 var dotIcon=L.divIcon({html:dotHtml,className:'',iconSize:[20,20],iconAnchor:[10,10]});
 L.marker([${currentPos[0]},${currentPos[1]}],{icon:dotIcon}).addTo(map);
@@ -94,13 +109,14 @@ L.marker([${currentPos[0]},${currentPos[1]}],{icon:dotIcon}).addTo(map);
 </html>`;
 }
 
-export default function HealthMap({ points, height = 300 }: Props) {
+export default function HealthMap({ points, height = 300, homeAddress }: Props) {
   const [livePos, setLivePos] = useState<[number, number] | null>(null);
   const [locLoading, setLocLoading] = useState(true);
+  const [route, setRoute] = useState<[number, number][] | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
 
   useEffect(() => {
     if (!navigator.geolocation) { setLocLoading(false); return; }
-    // maximumAge: accept cached position up to 60s old — instant return
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLivePos([pos.coords.latitude, pos.coords.longitude]);
@@ -111,6 +127,25 @@ export default function HealthMap({ points, height = 300 }: Props) {
     );
   }, []);
 
+  // Clear route when homeAddress changes
+  useEffect(() => { setRoute(null); }, [homeAddress?.lat, homeAddress?.lng]);
+
+  const goHome = async () => {
+    if (!homeAddress || !livePos) return;
+    setRouteLoading(true);
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${livePos[1]},${livePos[0]};${homeAddress.lng},${homeAddress.lat}?overview=full&geometries=geojson`;
+      const data = await (await fetch(url)).json();
+      const coords = data.routes?.[0]?.geometry?.coordinates;
+      if (coords) {
+        // OSRM returns [lng, lat]; Leaflet needs [lat, lng]
+        setRoute(coords.map(([lng, lat]: [number, number]) => [lat, lng] as [number, number]));
+      }
+    } catch { } finally {
+      setRouteLoading(false);
+    }
+  };
+
   const { html, hasData } = useMemo(() => {
     const sorted = points.length ? [...points].sort((a, b) => b.ts - a.ts) : null;
     const currentPos: [number, number] | null =
@@ -119,8 +154,8 @@ export default function HealthMap({ points, height = 300 }: Props) {
     if (!currentPos) return { html: "", hasData: false };
 
     const clusters = points.length ? clusterPoints(points) : [];
-    return { html: buildLeafletHTML(points, clusters, currentPos), hasData: true };
-  }, [points, livePos]);
+    return { html: buildLeafletHTML(points, clusters, currentPos, homeAddress, route ?? undefined), hasData: true };
+  }, [points, livePos, homeAddress, route]);
 
   if (locLoading) {
     return (
@@ -144,9 +179,31 @@ export default function HealthMap({ points, height = 300 }: Props) {
   }
 
   return (
-    <View style={{ height, borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
+    <View style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
       {/* @ts-ignore */}
-      <iframe srcDoc={html} style={{ width: "100%", height: "100%", border: "none" }} title="Health Map" sandbox="allow-scripts" />
+      <iframe srcDoc={html} style={{ width: "100%", height, border: "none", display: "block" }} title="Health Map" sandbox="allow-scripts" />
+      {homeAddress && (
+        <View style={{ flexDirection: "row", gap: 8, padding: 10, backgroundColor: "#0E1016", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" }}>
+          <Pressable
+            onPress={route ? () => setRoute(null) : goHome}
+            disabled={routeLoading}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: route ? "rgba(91,180,255,0.15)" : "rgba(255,255,255,0.06)", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: route ? "rgba(91,180,255,0.4)" : "rgba(255,255,255,0.12)" }}
+          >
+            {routeLoading
+              ? <ActivityIndicator size="small" color="#5BB4FF" />
+              : <Text style={{ fontSize: 14 }}>{route ? "✕" : "🏠"}</Text>
+            }
+            <Text style={{ color: route ? "#5BB4FF" : "#C7CAD3", fontSize: 12, fontWeight: "700" }}>
+              {routeLoading ? "Đang tính…" : route ? "Xoá đường đi" : "Về nhà"}
+            </Text>
+          </Pressable>
+          {route && (
+            <View style={{ flex: 1, justifyContent: "center" }}>
+              <Text style={{ color: "#5A5E6B", fontSize: 11 }} numberOfLines={1}>→ {homeAddress.label}</Text>
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
