@@ -5,6 +5,9 @@ import {
   ScrollView,
   ActivityIndicator,
   useWindowDimensions,
+  TouchableOpacity,
+  Modal,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, {
@@ -1010,12 +1013,453 @@ function WeeklyBars({
   );
 }
 
+// ─── Tab Bar ─────────────────────────────────────────────────────────────────
+
+function HealthTabBar({
+  active,
+  onChange,
+}: {
+  active: "hr" | "steps";
+  onChange: (t: "hr" | "steps") => void;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        backgroundColor: C.bg2,
+        borderRadius: 14,
+        padding: 3,
+        borderWidth: 1,
+        borderColor: C.line,
+      }}
+    >
+      {(["hr", "steps"] as const).map((t) => {
+        const on = active === t;
+        return (
+          <TouchableOpacity
+            key={t}
+            onPress={() => onChange(t)}
+            style={{
+              flex: 1,
+              paddingVertical: 8,
+              borderRadius: 11,
+              alignItems: "center",
+              backgroundColor: on ? C.bg1 : "transparent",
+              borderWidth: on ? 1 : 0,
+              borderColor: on ? (t === "hr" ? "rgba(255,59,92,0.35)" : "rgba(74,222,128,0.35)") : "transparent",
+            }}
+          >
+            <Text
+              style={{
+                color: on ? (t === "hr" ? C.hr : C.green) : C.ink3,
+                fontSize: 12,
+                fontWeight: "700",
+                letterSpacing: 0.3,
+              }}
+            >
+              {t === "hr" ? "❤️  Nhịp tim" : "👣  Bước chân"}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Steps helpers ────────────────────────────────────────────────────────────
+
+function arcPath(
+  cx: number, cy: number, r: number,
+  startDeg: number, endDeg: number,
+): string {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const sx = cx + r * Math.cos(rad(startDeg));
+  const sy = cy + r * Math.sin(rad(startDeg));
+  const ex = cx + r * Math.cos(rad(endDeg));
+  const ey = cy + r * Math.sin(rad(endDeg));
+  const large = endDeg - startDeg > 180 ? 1 : 0;
+  return `M${sx.toFixed(2)},${sy.toFixed(2)} A${r},${r},0,${large},1,${ex.toFixed(2)},${ey.toFixed(2)}`;
+}
+
+function fmtSteps(n: number): string {
+  if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
+  return n.toLocaleString("vi-VN");
+}
+
+function dayLabel(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  const days = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  return days[d.getDay()];
+}
+
+function computeHourlySteps(records: HealthSyncRecord[]): number[] {
+  const maxByHour: (number | null)[] = new Array(24).fill(null);
+  for (const r of records) {
+    const h = new Date(r.ts * 1000).getHours();
+    if (maxByHour[h] === null || r.steps > maxByHour[h]!) maxByHour[h] = r.steps;
+  }
+  const hourly = new Array(24).fill(0);
+  let prev = 0;
+  for (let h = 0; h < 24; h++) {
+    if (maxByHour[h] !== null) {
+      hourly[h] = Math.max(0, maxByHour[h]! - prev);
+      prev = maxByHour[h]!;
+    }
+  }
+  return hourly;
+}
+
+// ─── Steps Hero Card ──────────────────────────────────────────────────────────
+
+function StepsHeroCard({ daily }: { daily: HealthDailySummary[] }) {
+  const today = daily[0];
+  const steps = today?.total_steps ?? 0;
+  const goal = 10000;
+  const pct = Math.min(1, steps / goal);
+  const kcal = today?.max_calories ?? Math.round(steps * 0.04);
+  const km = (steps * 0.00075).toFixed(1);
+
+  const size = 160;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 62;
+  const startDeg = 135;
+  const totalArc = 270;
+  const endDeg = startDeg + totalArc * pct;
+
+  const bgArc = arcPath(cx, cy, r, startDeg, startDeg + totalArc);
+  const fgArc = pct > 0.002 ? arcPath(cx, cy, r, startDeg, endDeg) : null;
+
+  return (
+    <DarkCard style={{ borderColor: "rgba(74,222,128,0.18)" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.green }} />
+        <Text style={{ color: C.green, fontSize: 11, fontWeight: "700", letterSpacing: 0.8 }}>
+          HÔM NAY
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+        {/* Progress ring */}
+        <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+          <Svg width={size} height={size}>
+            <Defs>
+              <LinearGradient id="stepRingGrad" x1="0" y1="1" x2="1" y2="0">
+                <Stop offset="0%" stopColor="#22D3EE" />
+                <Stop offset="100%" stopColor="#4ADE80" />
+              </LinearGradient>
+            </Defs>
+            <Path d={bgArc} stroke="rgba(255,255,255,0.07)" strokeWidth={13} fill="none" strokeLinecap="round" />
+            {fgArc && (
+              <Path d={fgArc} stroke="url(#stepRingGrad)" strokeWidth={13} fill="none" strokeLinecap="round" />
+            )}
+          </Svg>
+          <View style={{ position: "absolute", alignItems: "center" }}>
+            <Text style={{ color: C.ink0, fontSize: 28, fontWeight: "700", fontFamily: "monospace", lineHeight: 32 }}>
+              {fmtSteps(steps)}
+            </Text>
+            <Text style={{ color: C.green, fontSize: 10, fontWeight: "600", marginTop: 2 }}>
+              {Math.round(pct * 100)}%
+            </Text>
+            <Text style={{ color: C.ink3, fontSize: 9, marginTop: 1 }}>/ 10k mục tiêu</Text>
+          </View>
+        </View>
+
+        {/* Stats */}
+        <View style={{ flex: 1, gap: 20 }}>
+          <View>
+            <Text style={{ color: C.ink3, fontSize: 10, fontWeight: "600", letterSpacing: 0.5 }}>CALORIES</Text>
+            <Text style={{ color: C.orange, fontSize: 22, fontWeight: "700", fontFamily: "monospace", marginTop: 2 }}>
+              {kcal}
+            </Text>
+            <Text style={{ color: C.ink3, fontSize: 10 }}>kcal</Text>
+          </View>
+          <View>
+            <Text style={{ color: C.ink3, fontSize: 10, fontWeight: "600", letterSpacing: 0.5 }}>QUÃNG ĐƯỜNG</Text>
+            <Text style={{ color: C.blue, fontSize: 22, fontWeight: "700", fontFamily: "monospace", marginTop: 2 }}>
+              {km}
+            </Text>
+            <Text style={{ color: C.ink3, fontSize: 10 }}>km</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Goal bar */}
+      <View style={{ marginTop: 16, gap: 5 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <Text style={{ color: C.ink3, fontSize: 10 }}>Mục tiêu 10,000 bước</Text>
+          <Text style={{ color: steps >= goal ? C.green : C.ink2, fontSize: 10, fontWeight: "600" }}>
+            {steps >= goal ? "Hoàn thành 🎉" : `còn ${(goal - steps).toLocaleString("vi-VN")} bước`}
+          </Text>
+        </View>
+        <View style={{ height: 4, backgroundColor: C.line, borderRadius: 2, overflow: "hidden" }}>
+          <View style={{ height: 4, width: `${Math.round(pct * 100)}%` as any, backgroundColor: C.green, borderRadius: 2 }} />
+        </View>
+      </View>
+    </DarkCard>
+  );
+}
+
+// ─── Steps Day Detail Modal ───────────────────────────────────────────────────
+
+function StepsDayDetail({
+  day,
+  historyAsc,
+  chartWidth,
+  onClose,
+}: {
+  day: HealthDailySummary;
+  historyAsc: HealthSyncRecord[];
+  chartWidth: number;
+  onClose: () => void;
+}) {
+  const dayRecords = historyAsc.filter((r) => r.date === day.date);
+  const hourly = computeHourlySteps(dayRecords);
+  const maxH = Math.max(...hourly, 1);
+  const steps = day.total_steps ?? 0;
+
+  const svgW = chartWidth - 32;
+  const svgH = 120;
+  const barW = Math.floor((svgW - 46) / 24);
+  const gap = (svgW - 46 - barW * 24) / 23;
+
+  const labelHours = [0, 6, 12, 18, 23];
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "flex-end" }}
+        onPress={onClose}
+      >
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <View
+            style={{
+              backgroundColor: C.bg1,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 20,
+              paddingBottom: 32,
+              borderTopWidth: 1,
+              borderColor: C.line,
+            }}
+          >
+            {/* Header */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <View>
+                <Text style={{ color: C.ink0, fontSize: 16, fontWeight: "700" }}>
+                  {dayLabel(day.date)} · {day.date.slice(5).replace("-", "/")}
+                </Text>
+                <Text style={{ color: C.green, fontSize: 24, fontWeight: "700", fontFamily: "monospace", marginTop: 4 }}>
+                  {fmtSteps(steps)} <Text style={{ color: C.ink3, fontSize: 12, fontWeight: "400" }}>bước</Text>
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={onClose}
+                style={{
+                  width: 30, height: 30, borderRadius: 15,
+                  backgroundColor: C.glass2, alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: C.ink2, fontSize: 16 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Hourly chart */}
+            <Text style={{ color: C.ink3, fontSize: 11, marginBottom: 8 }}>Số bước theo giờ</Text>
+            <Svg width={svgW} height={svgH + 18}>
+              <Defs>
+                <LinearGradient id="hourBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor="#4ADE80" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#22D3EE" stopOpacity="0.6" />
+                </LinearGradient>
+              </Defs>
+              {hourly.map((v, h) => {
+                const bh = v > 0 ? Math.max(3, (v / maxH) * svgH) : 2;
+                const x = 23 + h * (barW + gap);
+                const y = svgH - bh;
+                return (
+                  <G key={h}>
+                    <Rect
+                      x={x} y={y} width={barW} height={bh}
+                      rx={2} ry={2}
+                      fill={v > 0 ? "url(#hourBarGrad)" : "rgba(255,255,255,0.04)"}
+                    />
+                  </G>
+                );
+              })}
+              {/* Y label */}
+              {[0, Math.round(maxH / 2), maxH].map((v, i) => (
+                <SvgText
+                  key={i}
+                  x={20} y={svgH - (v / maxH) * svgH + 4}
+                  fontSize={8} fill={C.ink3} textAnchor="end"
+                >
+                  {v > 1000 ? `${(v / 1000).toFixed(1)}k` : v}
+                </SvgText>
+              ))}
+              {/* X labels */}
+              {labelHours.map((h) => (
+                <SvgText
+                  key={h}
+                  x={23 + h * (barW + gap) + barW / 2}
+                  y={svgH + 14}
+                  fontSize={9} fill={C.ink3} textAnchor="middle"
+                >
+                  {`${h}h`}
+                </SvgText>
+              ))}
+            </Svg>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Steps Weekly Chart ───────────────────────────────────────────────────────
+
+function StepsWeeklyChart({
+  daily,
+  historyAsc,
+  chartWidth,
+}: {
+  daily: HealthDailySummary[];
+  historyAsc: HealthSyncRecord[];
+  chartWidth: number;
+}) {
+  const [selectedDay, setSelectedDay] = useState<HealthDailySummary | null>(null);
+
+  const items = [...daily].reverse();
+  if (!items.length) {
+    return (
+      <DarkCard>
+        <Label text="Lịch sử 7 ngày" />
+        <Text style={{ color: C.ink3, fontSize: 12 }}>Chưa có dữ liệu</Text>
+      </DarkCard>
+    );
+  }
+
+  const maxSteps = Math.max(...items.map((d) => d.total_steps ?? 0), 1);
+  const barMaxH = 80;
+  const svgW = chartWidth - 32;
+  const svgH = barMaxH + 48;
+  const barW = Math.floor((svgW - 8) / items.length) - 6;
+  const spacing = (svgW - barW * items.length) / Math.max(items.length - 1, 1);
+  const todayDate = items[items.length - 1]?.date;
+
+  return (
+    <>
+      <DarkCard>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <Label text="Lịch sử 7 ngày" />
+          <Text style={{ color: C.ink3, fontSize: 10 }}>Nhấn để xem chi tiết</Text>
+        </View>
+        <Svg width={svgW} height={svgH}>
+          <Defs>
+            {items.map((_, i) => {
+              const isToday = items[i].date === todayDate;
+              return (
+                <LinearGradient key={i} id={`stepBar${i}`} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor={isToday ? "#4ADE80" : "#22D3EE"} />
+                  <Stop offset="100%" stopColor={isToday ? "rgba(74,222,128,0.25)" : "rgba(34,211,238,0.2)"} />
+                </LinearGradient>
+              );
+            })}
+          </Defs>
+          {items.map((d, i) => {
+            const s = d.total_steps ?? 0;
+            const bh = s > 0 ? Math.max(4, (s / maxSteps) * barMaxH) : 4;
+            const x = i * (barW + spacing);
+            const y = barMaxH - bh;
+            const isToday = d.date === todayDate;
+            return (
+              <G
+                key={d.date}
+                onPress={() => setSelectedDay(d)}
+              >
+                {/* Tap target */}
+                <Rect x={x} y={0} width={barW} height={svgH} fill="transparent" />
+                {/* Bar */}
+                <Rect x={x} y={y} width={barW} height={bh} rx={5} ry={5} fill={`url(#stepBar${i})`} />
+                {/* Day label */}
+                <SvgText
+                  x={x + barW / 2} y={barMaxH + 14}
+                  fontSize={10} fill={isToday ? C.green : C.ink3}
+                  textAnchor="middle" fontFamily="monospace" fontWeight={isToday ? "700" : "400"}
+                >
+                  {dayLabel(d.date)}
+                </SvgText>
+                {/* Step count */}
+                {s > 0 && (
+                  <SvgText
+                    x={x + barW / 2} y={y - 4}
+                    fontSize={9} fill={isToday ? C.green : C.ink2}
+                    textAnchor="middle"
+                  >
+                    {fmtSteps(s)}
+                  </SvgText>
+                )}
+                {/* Goal line indicator dot */}
+                {isToday && (
+                  <Rect x={x} y={barMaxH - (10000 / maxSteps) * barMaxH} width={barW} height={1}
+                    fill="rgba(74,222,128,0.3)" />
+                )}
+              </G>
+            );
+          })}
+          {/* Goal dashed line */}
+          <SvgLine
+            x1={0} y1={barMaxH - (Math.min(1, 10000 / maxSteps)) * barMaxH}
+            x2={svgW} y2={barMaxH - (Math.min(1, 10000 / maxSteps)) * barMaxH}
+            stroke="rgba(74,222,128,0.2)" strokeWidth={1} strokeDasharray="4,4"
+          />
+          <SvgText
+            x={svgW - 2} y={barMaxH - (Math.min(1, 10000 / maxSteps)) * barMaxH - 3}
+            fontSize={8} fill="rgba(74,222,128,0.5)" textAnchor="end"
+          >
+            10k
+          </SvgText>
+        </Svg>
+      </DarkCard>
+
+      {selectedDay && (
+        <StepsDayDetail
+          day={selectedDay}
+          historyAsc={historyAsc}
+          chartWidth={chartWidth}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Steps Dashboard ──────────────────────────────────────────────────────────
+
+function StepsDashboard({
+  daily,
+  historyAsc,
+  chartWidth,
+}: {
+  daily: HealthDailySummary[];
+  historyAsc: HealthSyncRecord[];
+  chartWidth: number;
+}) {
+  return (
+    <>
+      <StepsHeroCard daily={daily} />
+      <StepsWeeklyChart daily={daily} historyAsc={historyAsc} chartWidth={chartWidth} />
+    </>
+  );
+}
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function Health() {
   const { width } = useWindowDimensions();
   const chartWidth = width - 32;
   const [range, setRange] = useState<Range>("24H");
+  const [activeTab, setActiveTab] = useState<"hr" | "steps">("hr");
   const user = useAuthStore((s) => s.user);
 
   const { data: devices, isLoading: loadingDevices, isError: devError } = useQuery({
@@ -1104,45 +1548,55 @@ export default function Health() {
           </Text>
         </View>
 
-        {/* Hero BPM */}
-        <HeroBpmCard
-          bpm={liveBpm}
-          sparkData={sparkData}
-          device={device}
-          chartWidth={chartWidth}
-        />
+        {/* Tab Bar */}
+        <HealthTabBar active={activeTab} onChange={setActiveTab} />
 
-        {/* Range Pills */}
-        <RangePills value={range} onChange={setRange} />
+        {activeTab === "hr" ? (
+          <>
+            {/* Hero BPM */}
+            <HeroBpmCard
+              bpm={liveBpm}
+              sparkData={sparkData}
+              device={device}
+              chartWidth={chartWidth}
+            />
 
-        {/* HR Area Chart */}
-        <DarkCard style={{ padding: 12 }}>
-          <Label text="Nhịp tim" />
-          <HRAreaChart
-            series={filtered}
+            {/* Range Pills */}
+            <RangePills value={range} onChange={setRange} />
+
+            {/* HR Area Chart */}
+            <DarkCard style={{ padding: 12 }}>
+              <Label text="Nhịp tim" />
+              <HRAreaChart
+                series={filtered}
+                daily={daily}
+                range={range}
+                chartWidth={chartWidth - 24}
+              />
+            </DarkCard>
+
+            {/* KPI Grid */}
+            <KpiGrid kpis={kpis} sparkHr={sparkHr} />
+
+            {/* Zone Donut */}
+            <ZoneDonut zones={zones} range={range} series={filtered} />
+
+            {/* Heatmap */}
+            <Heatmap heatmap={heatmap} chartWidth={chartWidth} />
+
+            {/* Stress */}
+            <StressCard stress={kpis.stress} chartWidth={chartWidth} />
+
+            {/* Weekly Bars */}
+            <WeeklyBars daily={daily} chartWidth={chartWidth} />
+          </>
+        ) : (
+          <StepsDashboard
             daily={daily}
-            range={range}
-            chartWidth={chartWidth - 24}
+            historyAsc={historyAsc}
+            chartWidth={chartWidth}
           />
-        </DarkCard>
-
-        {/* KPI Grid */}
-        <KpiGrid kpis={kpis} sparkHr={sparkHr} />
-
-        {/* Zone Donut */}
-        <ZoneDonut zones={zones} range={range} series={filtered} />
-
-        {/* Heatmap */}
-        <Heatmap heatmap={heatmap} chartWidth={chartWidth} />
-
-        {/* Stress */}
-        <StressCard
-          stress={kpis.stress}
-          chartWidth={chartWidth}
-        />
-
-        {/* Weekly Bars */}
-        <WeeklyBars daily={daily} chartWidth={chartWidth} />
+        )}
 
         {/* Footer */}
         <View style={{ alignItems: "center", paddingBottom: 8 }}>
