@@ -47,6 +47,12 @@
     </dict>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>ConnectDoctor cần Bluetooth để tìm thiết bị sức khoẻ đang kết nối.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>ConnectDoctor ghi lại lịch sử di chuyển của bạn để hiển thị trên bản đồ sức khoẻ.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>ConnectDoctor cần vị trí nền để ghi lịch sử di chuyển khi app đóng.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>ConnectDoctor cần vị trí nền để ghi lịch sử di chuyển khi app đóng.</string>
     <key>NSCameraUsageDescription</key>
     <string>Cho phép ConnectDoctor sử dụng camera để chụp đơn thuốc.</string>
     <key>NSMicrophoneUsageDescription</key>
@@ -60,6 +66,8 @@
     <key>UIBackgroundModes</key>
     <array>
       <string>bluetooth-central</string>
+      <string>location</string>
+      <string>fetch</string>
     </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
