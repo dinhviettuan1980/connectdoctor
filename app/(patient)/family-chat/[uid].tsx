@@ -1,86 +1,82 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
+  View, Text, ScrollView, Pressable, TextInput,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
-import { Chip } from "@/components/ui/Chip";
 import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Segmented";
-import { getMockDoctor } from "@/lib/mockDoctors";
-import { openEmail, openPhone } from "@/lib/linking";
-import { useAuthStore } from "@/hooks/useAuth";
 import VideoCallModal from "@/components/VideoCallModal";
+import { useAuthStore } from "@/hooks/useAuth";
 import {
-  getOrCreateThread,
-  sendMessage,
-  subscribeToMessages,
-  markThreadRead,
-} from "@/lib/chat";
+  getOrCreateFamilyThread, sendFamilyMessage,
+  subscribeToFamilyMessages, markFamilyThreadRead,
+  type FamilyMessage,
+} from "@/lib/familyChat";
+import { subscribeToUser, isOnline } from "@/lib/users";
 import { formatTime } from "@/lib/time";
-import type { ChatMessage } from "@/lib/types";
+import type { AppUser } from "@/lib/types";
 
-export default function ChatThread() {
+export default function FamilyChat() {
   const router = useRouter();
-  const { doctorId } = useLocalSearchParams<{ doctorId: string }>();
+  const { uid: otherUid } = useLocalSearchParams<{ uid: string }>();
   const user = useAuthStore((s) => s.user);
-  const d = getMockDoctor(doctorId ?? "");
 
+  const [other, setOther] = useState<AppUser | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<FamilyMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  // Get or create thread, then subscribe to messages
   useEffect(() => {
-    if (!user || !doctorId) return;
+    if (!otherUid) return;
+    return subscribeToUser(otherUid, setOther);
+  }, [otherUid]);
+
+  useEffect(() => {
+    if (!user || !otherUid || !other) return;
     let msgUnsub: (() => void) | undefined;
     let readTimer: ReturnType<typeof setTimeout> | undefined;
 
-    getOrCreateThread(user.uid, doctorId, {
-      patientName: user.displayName ?? "Bệnh nhân",
-      doctorName: d.fullName,
-    }).then((tid) => {
+    getOrCreateFamilyThread(
+      user.uid, user.displayName ?? "Tôi",
+      otherUid, other.displayName ?? "Người thân",
+    ).then((tid) => {
       setThreadId(tid);
-      msgUnsub = subscribeToMessages(tid, (msgs) => {
+      msgUnsub = subscribeToFamilyMessages(tid, (msgs) => {
         setMessages(msgs);
         setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
       });
-      // Mark as read after 3 s on screen (matches user expectation of "dừng lại")
-      readTimer = setTimeout(() => markThreadRead(tid, "patient").catch(() => {}), 3000);
+      readTimer = setTimeout(() => markFamilyThreadRead(tid, user.uid).catch(() => {}), 1500);
     });
 
     return () => {
       msgUnsub?.();
       clearTimeout(readTimer);
     };
-  }, [user?.uid, doctorId]);
+  }, [user?.uid, otherUid, other?.displayName]);
 
   const send = async () => {
-    if (!draft.trim() || !threadId || !user) return;
+    if (!draft.trim() || !threadId || !user || !otherUid) return;
     const text = draft.trim();
     setDraft("");
     setSending(true);
     try {
-      await sendMessage(threadId, user.uid, doctorId ?? "", text);
+      await sendFamilyMessage(threadId, user.uid, otherUid, text);
     } catch (err) {
-      console.error("[chat send]", err);
-      setDraft(text); // restore on failure so user doesn't lose the message
+      console.error("[family-chat send]", err);
+      setDraft(text);
     } finally {
       setSending(false);
     }
   };
+
+  const displayName = other?.displayName ?? "Người thân";
+  const online = isOnline(other);
 
   return (
     <SafeAreaView className="flex-1 bg-paper">
@@ -97,34 +93,52 @@ export default function ChatThread() {
             >
               <Text className="text-xl text-ink-2">‹</Text>
             </Pressable>
-            <Pressable
-              onPress={() => router.push(`/(patient)/chat/doctor/${d.uid}`)}
-              className="flex-row items-center gap-2 flex-1"
-            >
-              <Avatar label={d.fullName} />
+            <View className="flex-row items-center gap-2 flex-1">
+              <View>
+                <Avatar label={displayName} uri={other?.photoURL ?? undefined} />
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 0, right: 0,
+                    width: 10, height: 10, borderRadius: 5,
+                    backgroundColor: online ? "#22c55e" : "#9ca3af",
+                    borderWidth: 1.5, borderColor: "#fafaf7",
+                  }}
+                />
+              </View>
               <View className="flex-1">
                 <Text className="text-xs font-bold text-ink" numberOfLines={1}>
-                  {d.fullName}
+                  {displayName}
                 </Text>
-                <Text className="text-[11px] text-ink-3">● online · {d.specialty}</Text>
+                <Text className="text-[11px]" style={{ color: online ? "#16a34a" : "#9ca3af" }}>
+                  {online ? "● Đang hoạt động" : "○ Ngoại tuyến"}
+                </Text>
               </View>
-            </Pressable>
+            </View>
           </View>
-          <View className="flex-row gap-3">
-            <Pressable onPress={() => setCallOpen(true)} hitSlop={8} disabled={!threadId} style={{ opacity: threadId ? 1 : 0.4 }}>
+          <View className="flex-row gap-3 items-center">
+            <Pressable
+              onPress={() => setCallOpen(true)}
+              hitSlop={8}
+              disabled={!threadId}
+              style={{ opacity: threadId ? 1 : 0.4 }}
+            >
               <Text className="text-base">📹</Text>
             </Pressable>
-            {d.email && (
+            {other?.phone && (
               <Pressable
-                onPress={() => openEmail(d.email!, "Tin nhắn từ ConnectDoctor")}
+                onPress={() => Linking.openURL(`tel:${other.phone!.replace(/\s/g, "")}`).catch(() => {})}
+                hitSlop={8}
+              >
+                <Text className="text-base">📞</Text>
+              </Pressable>
+            )}
+            {other?.email && (
+              <Pressable
+                onPress={() => Linking.openURL(`mailto:${other.email}`).catch(() => {})}
                 hitSlop={8}
               >
                 <Text className="text-base">✉</Text>
-              </Pressable>
-            )}
-            {d.phone && (
-              <Pressable onPress={() => openPhone(d.phone!)} hitSlop={8}>
-                <Text className="text-base">📞</Text>
               </Pressable>
             )}
           </View>
@@ -137,30 +151,16 @@ export default function ChatThread() {
           contentContainerStyle={{ padding: 16, gap: 8 }}
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         >
-          {/* Doctor intro card */}
-          <Pressable onPress={() => router.push(`/(patient)/chat/doctor/${d.uid}`)}>
-            <Card variant="soft" padding="md">
-              <View className="flex-row items-center gap-3">
-                <Avatar label={d.fullName} size="lg" />
-                <View className="flex-1">
-                  <Text className="text-xs font-bold text-ink">{d.fullName}</Text>
-                  <Text className="text-[11px] text-ink-3">
-                    {d.degree} · {d.workplace}
-                  </Text>
-                  <View className="flex-row gap-1.5 mt-1">
-                    {d.verified && <Chip variant="accent">✓ Xác minh</Chip>}
-                    {d.yearsExperience && <Chip variant="soft">{d.yearsExperience}n KN</Chip>}
-                  </View>
-                </View>
-                <Text className="text-base text-ink-3">›</Text>
-              </View>
-            </Card>
-          </Pressable>
-
           <Text className="text-[10px] text-ink-3 text-center font-mono mt-2">— Hôm nay —</Text>
 
           {!threadId && (
             <ActivityIndicator size="small" className="mt-4" />
+          )}
+
+          {threadId && messages.length === 0 && (
+            <Text className="text-[11px] text-ink-3 text-center mt-4">
+              Chưa có tin nhắn. Hãy gửi lời chào!
+            </Text>
           )}
 
           {messages.map((m) => {
@@ -184,7 +184,7 @@ export default function ChatThread() {
                   className="text-[10px] text-ink-3 mt-0.5"
                   style={{ textAlign: isMe ? "right" : "left" }}
                 >
-                  {isMe ? "Bạn" : "BS"} · {formatTime(m.createdAt)}
+                  {isMe ? "Bạn" : displayName} · {formatTime(m.createdAt)}
                 </Text>
               </View>
             );
@@ -193,9 +193,6 @@ export default function ChatThread() {
 
         {/* Input bar */}
         <View className="flex-row items-center gap-2 px-3 py-2 border-t border-line">
-          <Pressable hitSlop={8}>
-            <Text className="text-lg">📷</Text>
-          </Pressable>
           <View className="flex-1 border border-line bg-paper rounded-full px-3 py-1.5">
             <TextInput
               value={draft}
@@ -218,7 +215,7 @@ export default function ChatThread() {
         <VideoCallModal
           visible={callOpen}
           room={`connectdoctor-${threadId}`}
-          displayName={user?.displayName ?? "Bệnh nhân"}
+          displayName={user?.displayName ?? "User"}
           onClose={() => setCallOpen(false)}
         />
       )}

@@ -13,6 +13,8 @@ import {
   initializeAuth,
   // @ts-ignore — getReactNativePersistence is exported but not typed in v11
   getReactNativePersistence,
+  browserLocalPersistence,
+  setPersistence,
   Auth,
 } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
@@ -38,6 +40,7 @@ const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseCon
 let auth: Auth;
 if (Platform.OS === "web") {
   auth = getAuth(app);
+  setPersistence(auth, browserLocalPersistence).catch(() => {});
 } else {
   try {
     auth = initializeAuth(app, {

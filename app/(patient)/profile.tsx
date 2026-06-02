@@ -37,7 +37,9 @@ import {
 } from "@/lib/medicationSchedules";
 import { requestNotificationPermission } from "@/lib/notifications";
 import { scanForHealthDevices, type HealthDevice } from "@/lib/ble";
-import type { MetricEntry, MetricType, PatientProfile } from "@/lib/types";
+import type { EmergencyContact, MetricEntry, MetricType, PatientProfile } from "@/lib/types";
+import { EmergencyContacts } from "@/components/EmergencyContacts";
+import HomeAddressPicker from "@/components/HomeAddressPicker";
 
 function formatDateTime(ts: number): string {
   return new Date(ts).toLocaleString("vi-VN", {
@@ -501,6 +503,12 @@ function InfoTab() {
         )}
       </Section>
 
+      {/* Emergency contacts */}
+      <EmergencyContacts
+        contacts={profile.emergencyContacts ?? []}
+        onChange={(next) => save({ emergencyContacts: next })}
+      />
+
       {/* Home address */}
       <Section
         title="ĐỊA CHỈ NHÀ"
@@ -580,63 +588,13 @@ function InfoTab() {
         )}
       </Section>
 
-      {/* Home address picker modal */}
-      <Modal visible={showHomePicker} animationType="slide" onRequestClose={() => setShowHomePicker(false)}>
-        <SafeAreaView className="flex-1 bg-paper">
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-            <View className="flex-row items-center justify-between px-4 py-3 border-b border-line-soft">
-              <Text className="font-bold text-base text-ink">Chọn địa chỉ nhà</Text>
-              <Pressable onPress={() => setShowHomePicker(false)} hitSlop={12}>
-                <Text className="text-ink-2 text-base">✕ Đóng</Text>
-              </Pressable>
-            </View>
-            <View className="flex-row gap-2 px-4 py-3">
-              <TextInput
-                value={homeQuery}
-                onChangeText={setHomeQuery}
-                onSubmitEditing={searchHome}
-                placeholder="Nhập địa chỉ nhà…"
-                placeholderTextColor="#b5b5b5"
-                returnKeyType="search"
-                style={{ flex: 1, borderWidth: 1, borderColor: "#c8c8c2", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: "#1a1a1a" }}
-                autoFocus
-              />
-              <Pressable
-                onPress={searchHome}
-                style={{ backgroundColor: "#5eb594", borderRadius: 8, paddingHorizontal: 16, justifyContent: "center" }}
-              >
-                {homeSearching
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Tìm</Text>
-                }
-              </Pressable>
-            </View>
-            <FlatList
-              data={homeResults}
-              keyExtractor={(_, i) => String(i)}
-              contentContainerStyle={{ paddingHorizontal: 16, gap: 0 }}
-              ListEmptyComponent={
-                !homeSearching ? (
-                  <Text className="text-[11px] text-ink-3 text-center mt-8">
-                    {homeQuery ? "Không tìm thấy kết quả" : "Nhập địa chỉ và nhấn Tìm"}
-                  </Text>
-                ) : null
-              }
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => selectHome(item)}
-                  className="py-3 border-b border-line-soft"
-                >
-                  <Text className="text-sm text-ink" numberOfLines={2}>{item.display_name}</Text>
-                  <Text className="font-mono text-[10px] text-ink-3 mt-0.5">
-                    {parseFloat(item.lat).toFixed(5)}, {parseFloat(item.lon).toFixed(5)}
-                  </Text>
-                </Pressable>
-              )}
-            />
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </Modal>
+      {/* Home address picker (with map + auto-complete) */}
+      <HomeAddressPicker
+        visible={showHomePicker}
+        initial={profile.homeAddress}
+        onClose={() => setShowHomePicker(false)}
+        onSelect={(addr) => { save({ homeAddress: addr }); setShowHomePicker(false); }}
+      />
 
       {/* Single-select pickers */}
       <PickerSheet

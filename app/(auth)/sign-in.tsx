@@ -4,11 +4,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { AppBar } from "@/components/AppBar";
 import { Divider } from "@/components/ui/Segmented";
 import { signInWithEmail, loadOrInitUserDoc } from "@/lib/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { useFacebookSignIn } from "@/hooks/useFacebookSignIn";
+import { SocialIconButton } from "@/components/SocialIconButton";
 
 export default function SignIn() {
   const router = useRouter();
@@ -43,8 +43,6 @@ export default function SignIn() {
   return (
     <SafeAreaView className="flex-1 bg-paper">
       <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-        <AppBar title="Đăng nhập" back />
-
         <Input
           label="Email"
           value={email}
@@ -75,13 +73,10 @@ export default function SignIn() {
           <View className="flex-1"><Divider /></View>
         </View>
 
-        <Button block onPress={googleSignIn}>
-          Tiếp tục với Google
-        </Button>
-
-        <Button block onPress={facebookSignIn}>
-          Tiếp tục với Facebook
-        </Button>
+        <View className="flex-row items-center justify-center gap-4 mt-1">
+          <SocialIconButton provider="google" onPress={googleSignIn} />
+          <SocialIconButton provider="facebook" onPress={facebookSignIn} />
+        </View>
 
         <Text
           className="text-xs text-center text-ink-3 mt-2"

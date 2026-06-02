@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, ActivityIndicator, Pressable, Linking } from "react-native";
+import { View, Text, ActivityIndicator, Pressable } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -10,6 +10,7 @@ import Animated, {
 import MapView, { Polyline, Circle, Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
 import type { LocationPoint } from "@/lib/locationApi";
+import { fetchRouteWithSteps, stepsToVietnamese, speakVi, stopSpeaking } from "@/lib/voiceNav";
 
 interface HomeAddress { label: string; lat: number; lng: number }
 
@@ -125,22 +126,27 @@ export default function HealthMap({ points, height = 300, homeAddress }: Props) 
       if (!last) setLocLoading(false);
     }
     init().catch(() => setLocLoading(false));
+    return () => { stopSpeaking(); };
   }, []);
 
   const goHome = async () => {
     if (!homeAddress || !livePos) return;
     setRouteLoading(true);
     try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${livePos.longitude},${livePos.latitude};${homeAddress.lng},${homeAddress.lat}?overview=full&geometries=geojson`;
-      const data = await (await fetch(url)).json();
-      const coords = data.routes?.[0]?.geometry?.coordinates;
-      if (coords) {
-        setRoute(coords.map(([lng, lat]: [number, number]) => ({ latitude: lat, longitude: lng })));
+      const result = await fetchRouteWithSteps(
+        livePos.latitude, livePos.longitude,
+        homeAddress.lat, homeAddress.lng,
+      );
+      if (result) {
+        setRoute(result.coords.map(([lng, lat]) => ({ latitude: lat, longitude: lng })));
+        speakVi(stepsToVietnamese(result));
       }
     } catch { } finally {
       setRouteLoading(false);
     }
   };
+
+  const clearRoute = () => { setRoute(null); stopSpeaking(); };
 
   const { coords, clusters, region, currentPos } = useMemo(() => {
     const hasHistory = points.length > 0;
@@ -255,7 +261,7 @@ export default function HealthMap({ points, height = 300, homeAddress }: Props) 
       {homeAddress && (
         <View style={{ flexDirection: "row", gap: 8, padding: 10, backgroundColor: "#0E1016", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" }}>
           <Pressable
-            onPress={route ? () => setRoute(null) : goHome}
+            onPress={route ? clearRoute : goHome}
             disabled={routeLoading}
             style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: route ? "rgba(91,180,255,0.15)" : "rgba(255,255,255,0.06)", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: route ? "rgba(91,180,255,0.4)" : "rgba(255,255,255,0.12)" }}
           >

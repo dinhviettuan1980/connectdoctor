@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, ActivityIndicator, Pressable } from "react-native";
 import type { LocationPoint } from "@/lib/locationApi";
+import { fetchRouteWithSteps, stepsToVietnamese, speakVi, stopSpeaking } from "@/lib/voiceNav";
 
 interface HomeAddress { label: string; lat: number; lng: number }
 
@@ -134,17 +135,22 @@ export default function HealthMap({ points, height = 300, homeAddress }: Props) 
     if (!homeAddress || !livePos) return;
     setRouteLoading(true);
     try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${livePos[1]},${livePos[0]};${homeAddress.lng},${homeAddress.lat}?overview=full&geometries=geojson`;
-      const data = await (await fetch(url)).json();
-      const coords = data.routes?.[0]?.geometry?.coordinates;
-      if (coords) {
-        // OSRM returns [lng, lat]; Leaflet needs [lat, lng]
-        setRoute(coords.map(([lng, lat]: [number, number]) => [lat, lng] as [number, number]));
+      const result = await fetchRouteWithSteps(
+        livePos[0], livePos[1],
+        homeAddress.lat, homeAddress.lng,
+      );
+      if (result) {
+        setRoute(result.coords.map(([lng, lat]) => [lat, lng] as [number, number]));
+        speakVi(stepsToVietnamese(result));
       }
     } catch { } finally {
       setRouteLoading(false);
     }
   };
+
+  const clearRoute = () => { setRoute(null); stopSpeaking(); };
+
+  useEffect(() => () => { stopSpeaking(); }, []);
 
   const { html, hasData } = useMemo(() => {
     const sorted = points.length ? [...points].sort((a, b) => b.ts - a.ts) : null;
@@ -185,7 +191,7 @@ export default function HealthMap({ points, height = 300, homeAddress }: Props) 
       {homeAddress && (
         <View style={{ flexDirection: "row", gap: 8, padding: 10, backgroundColor: "#0E1016", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" }}>
           <Pressable
-            onPress={route ? () => setRoute(null) : goHome}
+            onPress={route ? clearRoute : goHome}
             disabled={routeLoading}
             style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: route ? "rgba(91,180,255,0.15)" : "rgba(255,255,255,0.06)", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: route ? "rgba(91,180,255,0.4)" : "rgba(255,255,255,0.12)" }}
           >

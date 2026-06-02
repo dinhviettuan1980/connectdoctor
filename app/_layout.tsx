@@ -15,6 +15,8 @@ import { loadOrInitUserDoc } from "@/lib/auth";
 import { linkPendingAndNotify } from "@/hooks/useGoogleSignIn";
 import { setPendingCredential } from "@/lib/pendingCredential";
 import { startLocationTracking, stopLocationTracking } from "@/lib/locationTracking";
+import { touchLastSeen } from "@/lib/users";
+import { AppState } from "react-native";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +67,15 @@ function AuthGate() {
     registerPushToken(user.uid);
     startLocationTracking(user.uid);
 
+    // Track online presence: update lastSeen on focus + every 60s while active
+    touchLastSeen(user.uid);
+    const interval = setInterval(() => {
+      if (AppState.currentState === "active") touchLastSeen(user.uid);
+    }, 60_000);
+    const appStateSub = AppState.addEventListener("change", (state) => {
+      if (state === "active") touchLastSeen(user.uid);
+    });
+
     // Handle tap on notification that opened the app from killed state
     getNotificationResponse().then((response) => {
       if (!response) return;
@@ -78,6 +89,11 @@ function AuthGate() {
     }).then((unsub) => {
       notifListenerRef.current = unsub;
     });
+
+    return () => {
+      clearInterval(interval);
+      appStateSub.remove();
+    };
   }, [user?.uid]);
 
   useEffect(() => {

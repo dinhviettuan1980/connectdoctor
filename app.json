@@ -23,6 +23,8 @@
         "NSLocationWhenInUseUsageDescription": "ConnectDoctor ghi lại lịch sử di chuyển của bạn để hiển thị trên bản đồ sức khoẻ.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "ConnectDoctor cần vị trí nền để ghi lịch sử di chuyển khi app đóng.",
         "NSLocationAlwaysUsageDescription": "ConnectDoctor cần vị trí nền để ghi lịch sử di chuyển khi app đóng.",
+        "NSContactsUsageDescription": "ConnectDoctor cần truy cập danh bạ để thêm liên hệ người thân.",
+        "LSApplicationQueriesSchemes": ["zalo", "tel"],
         "UIBackgroundModes": ["location", "fetch"]
       },
       "appleTeamId": "GXSFH7K2X5"
@@ -42,7 +44,8 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION"
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.READ_CONTACTS"
       ]
     },
     "web": {
@@ -90,6 +93,12 @@
           "isBackgroundEnabled": false,
           "modes": ["central"],
           "bluetoothAlwaysPermission": "ConnectDoctor cần Bluetooth để tìm thiết bị sức khoẻ đang kết nối."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Cho phép ConnectDoctor truy cập danh bạ để thêm liên hệ người thân."
         }
       ]
     ],

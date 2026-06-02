@@ -151,6 +151,36 @@ service cloud.firestore {
       }
     }
 
+    // ─── /familyChats/{threadId} ─────────────────────────────────────────────
+    // 1-1 chat between any two app users (e.g. family members).
+    // threadId = sorted(uidA, uidB).join("_")
+
+    match /familyChats/{threadId} {
+      allow get: if isAuthed() && (
+        threadId.split("_")[0] == request.auth.uid ||
+        threadId.split("_")[1] == request.auth.uid
+      );
+      allow list: if isAuthed() &&
+        request.auth.uid in resource.data.participants;
+      allow create: if isAuthed() &&
+        request.auth.uid in request.resource.data.participants;
+      allow update: if isAuthed() &&
+        request.auth.uid in resource.data.participants;
+
+      match /messages/{msgId} {
+        allow read: if isAuthed() && (
+          threadId.split("_")[0] == request.auth.uid ||
+          threadId.split("_")[1] == request.auth.uid
+        );
+        allow create: if isAuthed() &&
+          (threadId.split("_")[0] == request.auth.uid || threadId.split("_")[1] == request.auth.uid) &&
+          request.auth.uid == request.resource.data.fromUid;
+        allow update: if isAuthed() &&
+          (threadId.split("_")[0] == request.auth.uid || threadId.split("_")[1] == request.auth.uid) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readAt"]);
+      }
+    }
+
     // ─── /knowledgeTracks/{id} ───────────────────────────────────────────────
     // All authenticated users can read; only admin can write/delete.
 

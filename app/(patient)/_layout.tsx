@@ -90,6 +90,7 @@ export default function PatientLayout() {
       <Tabs.Screen name="ai" options={{ href: null }} />
       <Tabs.Screen name="chat" options={{ href: null }} />
       <Tabs.Screen name="ocr" options={{ href: null }} />
+      <Tabs.Screen name="family-chat" options={{ href: null }} />
     </Tabs>
   );
 }

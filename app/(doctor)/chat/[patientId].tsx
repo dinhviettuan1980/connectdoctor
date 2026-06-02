@@ -24,6 +24,7 @@ import {
 } from "@/lib/chat";
 import { formatTime } from "@/lib/time";
 import type { ChatMessage } from "@/lib/types";
+import VideoCallModal from "@/components/VideoCallModal";
 
 export default function DoctorChatThread() {
   const router = useRouter();
@@ -38,6 +39,7 @@ export default function DoctorChatThread() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -92,6 +94,9 @@ export default function DoctorChatThread() {
             </Text>
             <Text className="text-[11px] text-ink-3">Bệnh nhân</Text>
           </View>
+          <Pressable onPress={() => setCallOpen(true)} hitSlop={8} disabled={!threadId} style={{ opacity: threadId ? 1 : 0.4, paddingHorizontal: 4 }}>
+            <Text className="text-base">📹</Text>
+          </Pressable>
         </View>
         <Divider />
 
@@ -152,6 +157,15 @@ export default function DoctorChatThread() {
           </Button>
         </View>
       </KeyboardAvoidingView>
+
+      {threadId && (
+        <VideoCallModal
+          visible={callOpen}
+          room={`connectdoctor-${threadId}`}
+          displayName={user?.displayName ?? "Bác sĩ"}
+          onClose={() => setCallOpen(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }

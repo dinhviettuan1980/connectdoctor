@@ -12,6 +12,7 @@ import { signUpWithEmail, loadOrInitUserDoc } from "@/lib/auth";
 import { useGoogleSignIn } from "@/hooks/useGoogleSignIn";
 import { useFacebookSignIn } from "@/hooks/useFacebookSignIn";
 import { useAuthStore } from "@/hooks/useAuth";
+import { SocialIconButton } from "@/components/SocialIconButton";
 
 export default function SignUp() {
   const router = useRouter();
@@ -82,13 +83,10 @@ export default function SignUp() {
           <View className="flex-1"><Divider /></View>
         </View>
 
-        <Button block onPress={googleSignIn}>
-          Tiếp tục với Google
-        </Button>
-
-        <Button block onPress={facebookSignIn}>
-          Tiếp tục với Facebook
-        </Button>
+        <View className="flex-row items-center justify-center gap-4 mt-1">
+          <SocialIconButton provider="google" onPress={googleSignIn} />
+          <SocialIconButton provider="facebook" onPress={facebookSignIn} />
+        </View>
 
         <Text
           className="text-xs text-center text-ink-3 mt-2"

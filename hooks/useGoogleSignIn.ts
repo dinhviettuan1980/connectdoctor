@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
-import { GoogleAuthProvider, linkWithCredential, signInWithCredential, signInWithRedirect } from "firebase/auth";
+import { GoogleAuthProvider, linkWithCredential, signInWithCredential, signInWithPopup } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { consumePendingCredential } from "@/lib/pendingCredential";
 
@@ -61,7 +61,14 @@ export function useGoogleSignIn(
 
   const signIn = async () => {
     if (Platform.OS === "web") {
-      await signInWithRedirect(auth, new GoogleAuthProvider());
+      try {
+        const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+        await linkPendingAndNotify(cred.user, onSuccess);
+      } catch (e: any) {
+        if (e?.code !== "auth/popup-closed-by-user" && e?.code !== "auth/cancelled-popup-request") {
+          onError(e);
+        }
+      }
     } else {
       await promptAsync();
     }

@@ -12,6 +12,7 @@ export interface AppUser {
   photoURL?: string | null;
   expoPushToken?: string;
   fcmToken?: string;
+  lastSeen?: number;
 }
 
 export interface PatientProfile {
@@ -26,6 +27,17 @@ export interface PatientProfile {
   allergies: string[];
   linkedDeviceIds?: string[];  // Firestore my_data document IDs e.g. ["006-B4024-00"]
   homeAddress?: { label: string; lat: number; lng: number };
+  emergencyContacts?: EmergencyContact[];
+}
+
+export interface EmergencyContact {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  relation?: string;
+  source: "manual" | "contacts";
+  linkedUid?: string;
 }
 
 export interface Medication {
