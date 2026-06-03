@@ -13,6 +13,7 @@ export interface AppUser {
   expoPushToken?: string;
   fcmToken?: string;
   lastSeen?: number;
+  locationSharedWith?: string[];     // uids allowed to read this user's location stream
 }
 
 export interface PatientProfile {
@@ -38,6 +39,17 @@ export interface EmergencyContact {
   relation?: string;
   source: "manual" | "contacts";
   linkedUid?: string;
+}
+
+export interface FamilyGroup {
+  id: string;
+  name: string;
+  ownerUid: string;
+  members: string[];                 // includes ownerUid
+  memberNames: Record<string, string>;
+  lastMessage?: string;
+  lastMessageAt?: number;
+  createdAt: number;
 }
 
 export interface Medication {

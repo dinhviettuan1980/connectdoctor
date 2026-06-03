@@ -39,6 +39,7 @@ import { requestNotificationPermission } from "@/lib/notifications";
 import { scanForHealthDevices, type HealthDevice } from "@/lib/ble";
 import type { EmergencyContact, MetricEntry, MetricType, PatientProfile } from "@/lib/types";
 import { EmergencyContacts } from "@/components/EmergencyContacts";
+import { FamilyGroups } from "@/components/FamilyGroups";
 import HomeAddressPicker from "@/components/HomeAddressPicker";
 
 function formatDateTime(ts: number): string {
@@ -508,6 +509,9 @@ function InfoTab() {
         contacts={profile.emergencyContacts ?? []}
         onChange={(next) => save({ emergencyContacts: next })}
       />
+
+      {/* Family groups */}
+      <FamilyGroups />
 
       {/* Home address */}
       <Section
