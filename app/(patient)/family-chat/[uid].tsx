@@ -116,29 +116,31 @@ export default function FamilyChat() {
               </View>
             </View>
           </View>
-          <View className="flex-row gap-3 items-center">
+          <View className="flex-row gap-2 items-center">
             <Pressable
               onPress={() => setCallOpen(true)}
               hitSlop={8}
               disabled={!threadId}
-              style={{ opacity: threadId ? 1 : 0.4 }}
+              style={{
+                width: 36, height: 36, borderRadius: 18,
+                backgroundColor: "#5eb594",
+                alignItems: "center", justifyContent: "center",
+                opacity: threadId ? 1 : 0.4,
+              }}
             >
-              <Text className="text-base">📹</Text>
+              <Text style={{ fontSize: 16 }}>📹</Text>
             </Pressable>
             {other?.phone && (
               <Pressable
                 onPress={() => Linking.openURL(`tel:${other.phone!.replace(/\s/g, "")}`).catch(() => {})}
                 hitSlop={8}
+                style={{
+                  width: 36, height: 36, borderRadius: 18,
+                  backgroundColor: "#dceee4",
+                  alignItems: "center", justifyContent: "center",
+                }}
               >
-                <Text className="text-base">📞</Text>
-              </Pressable>
-            )}
-            {other?.email && (
-              <Pressable
-                onPress={() => Linking.openURL(`mailto:${other.email}`).catch(() => {})}
-                hitSlop={8}
-              >
-                <Text className="text-base">✉</Text>
+                <Text style={{ fontSize: 16 }}>📞</Text>
               </Pressable>
             )}
           </View>

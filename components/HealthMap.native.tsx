@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ActivityIndicator, Pressable } from "react-native";
 import Animated, {
   useSharedValue,
@@ -18,6 +18,7 @@ interface Props {
   points: LocationPoint[];
   height?: number;
   homeAddress?: HomeAddress;
+  autoGoHome?: boolean;
 }
 
 function distanceM(a: LocationPoint, b: LocationPoint): number {
@@ -101,7 +102,7 @@ function PulsingDot() {
   );
 }
 
-export default function HealthMap({ points, height = 300, homeAddress }: Props) {
+export default function HealthMap({ points, height = 300, homeAddress, autoGoHome }: Props) {
   const [livePos, setLivePos] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locLoading, setLocLoading] = useState(true);
   const [route, setRoute] = useState<{ latitude: number; longitude: number }[] | null>(null);
@@ -147,6 +148,14 @@ export default function HealthMap({ points, height = 300, homeAddress }: Props) 
   };
 
   const clearRoute = () => { setRoute(null); stopSpeaking(); };
+
+  const autoTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoGoHome && livePos && homeAddress && !route && !autoTriggeredRef.current) {
+      autoTriggeredRef.current = true;
+      goHome();
+    }
+  }, [autoGoHome, livePos, homeAddress]);
 
   const { coords, clusters, region, currentPos } = useMemo(() => {
     const hasHistory = points.length > 0;

@@ -3,7 +3,7 @@ import {
   View, Text, Pressable, TextInput, FlatList,
   ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, PROVIDER_DEFAULT, type Region } from "react-native-maps";
 import * as Location from "expo-location";
 import { geocode, type NominatimResult } from "@/lib/geocoding";
@@ -204,7 +204,7 @@ export default function HomeAddressPicker({ visible, initial, onClose, onSelect 
             )}
           />
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }

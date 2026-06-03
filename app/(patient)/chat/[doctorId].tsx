@@ -110,21 +110,31 @@ export default function ChatThread() {
               </View>
             </Pressable>
           </View>
-          <View className="flex-row gap-3">
-            <Pressable onPress={() => setCallOpen(true)} hitSlop={8} disabled={!threadId} style={{ opacity: threadId ? 1 : 0.4 }}>
-              <Text className="text-base">📹</Text>
+          <View className="flex-row gap-2 items-center">
+            <Pressable
+              onPress={() => setCallOpen(true)}
+              hitSlop={8}
+              disabled={!threadId}
+              style={{
+                width: 36, height: 36, borderRadius: 18,
+                backgroundColor: "#5eb594",
+                alignItems: "center", justifyContent: "center",
+                opacity: threadId ? 1 : 0.4,
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>📹</Text>
             </Pressable>
-            {d.email && (
-              <Pressable
-                onPress={() => openEmail(d.email!, "Tin nhắn từ ConnectDoctor")}
-                hitSlop={8}
-              >
-                <Text className="text-base">✉</Text>
-              </Pressable>
-            )}
             {d.phone && (
-              <Pressable onPress={() => openPhone(d.phone!)} hitSlop={8}>
-                <Text className="text-base">📞</Text>
+              <Pressable
+                onPress={() => openPhone(d.phone!)}
+                hitSlop={8}
+                style={{
+                  width: 36, height: 36, borderRadius: 18,
+                  backgroundColor: "#dceee4",
+                  alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>📞</Text>
               </Pressable>
             )}
           </View>

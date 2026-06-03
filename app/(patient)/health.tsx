@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import {
   View,
   Text,
@@ -1513,7 +1514,14 @@ export default function Health() {
   const { width } = useWindowDimensions();
   const chartWidth = width - 32;
   const [range, setRange] = useState<Range>("24H");
-  const [activeTab, setActiveTab] = useState<HealthTab>("hr");
+  const routeParams = useLocalSearchParams<{ tab?: string; action?: string }>();
+  const [activeTab, setActiveTab] = useState<HealthTab>(
+    routeParams.tab === "map" ? "map" : "hr",
+  );
+  useEffect(() => {
+    if (routeParams.tab === "map") setActiveTab("map");
+  }, [routeParams.tab]);
+  const triggerGoHomeRef = useRef(routeParams.action === "goHome");
   const user = useAuthStore((s) => s.user);
 
   const { data: devices, isLoading: loadingDevices, isError: devError } = useQuery({
@@ -1663,7 +1671,12 @@ export default function Health() {
             <WeeklyBars daily={daily} chartWidth={chartWidth} />
           </>
         ) : activeTab === "map" ? (
-          <HealthMap points={locationPoints} height={420} homeAddress={homeAddress} />
+          <HealthMap
+            points={locationPoints}
+            height={420}
+            homeAddress={homeAddress}
+            autoGoHome={triggerGoHomeRef.current}
+          />
         ) : (
           <StepsDashboard
             historyAsc={historyAsc}

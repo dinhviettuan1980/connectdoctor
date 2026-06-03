@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ActivityIndicator, Pressable } from "react-native";
 import type { LocationPoint } from "@/lib/locationApi";
 import { fetchRouteWithSteps, stepsToVietnamese, speakVi, stopSpeaking } from "@/lib/voiceNav";
@@ -9,6 +9,7 @@ interface Props {
   points: LocationPoint[];
   height?: number;
   homeAddress?: HomeAddress;
+  autoGoHome?: boolean;
 }
 
 function distanceM(a: LocationPoint, b: LocationPoint): number {
@@ -110,7 +111,7 @@ L.marker([${currentPos[0]},${currentPos[1]}],{icon:dotIcon}).addTo(map);
 </html>`;
 }
 
-export default function HealthMap({ points, height = 300, homeAddress }: Props) {
+export default function HealthMap({ points, height = 300, homeAddress, autoGoHome }: Props) {
   const [livePos, setLivePos] = useState<[number, number] | null>(null);
   const [locLoading, setLocLoading] = useState(true);
   const [route, setRoute] = useState<[number, number][] | null>(null);
@@ -151,6 +152,14 @@ export default function HealthMap({ points, height = 300, homeAddress }: Props) 
   const clearRoute = () => { setRoute(null); stopSpeaking(); };
 
   useEffect(() => () => { stopSpeaking(); }, []);
+
+  const autoTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoGoHome && livePos && homeAddress && !route && !autoTriggeredRef.current) {
+      autoTriggeredRef.current = true;
+      goHome();
+    }
+  }, [autoGoHome, livePos, homeAddress]);
 
   const { html, hasData } = useMemo(() => {
     const sorted = points.length ? [...points].sort((a, b) => b.ts - a.ts) : null;

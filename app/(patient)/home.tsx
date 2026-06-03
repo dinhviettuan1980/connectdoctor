@@ -65,6 +65,37 @@ export default function PatientHome() {
           </View>
         </Card>
 
+        <View className="flex-row gap-2">
+          <Pressable
+            onPress={() => router.push({ pathname: "/(patient)/health", params: { tab: "map", action: "goHome" } } as any)}
+            className="flex-1"
+          >
+            <Card variant="soft" padding="md">
+              <View className="flex-row items-center gap-3">
+                <Text style={{ fontSize: 26 }}>🏠</Text>
+                <View className="flex-1">
+                  <Text className="text-xs font-bold text-ink">Về nhà</Text>
+                  <Text className="text-[10px] text-ink-3">Chỉ đường + đọc to</Text>
+                </View>
+              </View>
+            </Card>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push({ pathname: "/(patient)/health", params: { tab: "map" } } as any)}
+            className="flex-1"
+          >
+            <Card variant="soft" padding="md">
+              <View className="flex-row items-center gap-3">
+                <Text style={{ fontSize: 26 }}>📍</Text>
+                <View className="flex-1">
+                  <Text className="text-xs font-bold text-ink">Bản đồ sức khoẻ</Text>
+                  <Text className="text-[10px] text-ink-3">Lịch sử di chuyển</Text>
+                </View>
+              </View>
+            </Card>
+          </Pressable>
+        </View>
+
         <Section title="Gợi ý nhanh">
           <View className="flex-row flex-wrap gap-1.5">
             {SUGGESTIONS.map((s) => (
