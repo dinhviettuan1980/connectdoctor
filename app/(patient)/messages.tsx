@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { AppBar } from "@/components/AppBar";
 import { UserMenu } from "@/components/UserMenu";
+import { NewChatSheet } from "@/components/NewChatSheet";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuthStore } from "@/hooks/useAuth";
@@ -24,6 +25,7 @@ export default function Messages() {
   const [doctorThreads, setDoctorThreads] = useState<ThreadWithNames[]>([]);
   const [familyThreads, setFamilyThreads] = useState<FamilyThread[]>([]);
   const [groups, setGroups] = useState<FamilyGroup[]>([]);
+  const [newSheetOpen, setNewSheetOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -83,7 +85,26 @@ export default function Messages() {
   return (
     <SafeAreaView className="flex-1 bg-paper">
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <AppBar title="Tin nhắn" subtitle={`${rows.length} cuộc chat`} right={<UserMenu />} />
+        <AppBar
+          title="Tin nhắn"
+          subtitle={`${rows.length} cuộc chat`}
+          right={
+            <View className="flex-row items-center gap-2">
+              <Pressable
+                onPress={() => setNewSheetOpen(true)}
+                hitSlop={8}
+                style={{
+                  width: 32, height: 32, borderRadius: 16,
+                  backgroundColor: "#5eb594",
+                  alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: "white", fontSize: 18, fontWeight: "700", lineHeight: 20 }}>+</Text>
+              </Pressable>
+              <UserMenu />
+            </View>
+          }
+        />
         <View className="gap-1.5">
           {rows.map((r) => {
             const unread = "unread" in r ? r.unread : 0;
@@ -136,12 +157,22 @@ export default function Messages() {
             );
           })}
           {rows.length === 0 && (
-            <Text className="text-center text-ink-3 text-sm py-12">
-              Chưa có cuộc chat nào.{"\n"}Hỏi AI để tìm bác sĩ, hoặc thêm Người thân trong Hồ sơ.
-            </Text>
+            <View className="items-center py-10 gap-3">
+              <Text className="text-center text-ink-3 text-sm">
+                Chưa có cuộc chat nào.
+              </Text>
+              <Pressable
+                onPress={() => setNewSheetOpen(true)}
+                className="bg-accent border border-accent-ink rounded-full px-4 py-2"
+              >
+                <Text className="text-white text-xs font-bold">+ Tạo nhóm hoặc nhắn tin</Text>
+              </Pressable>
+            </View>
           )}
         </View>
       </ScrollView>
+
+      <NewChatSheet visible={newSheetOpen} onClose={() => setNewSheetOpen(false)} />
     </SafeAreaView>
   );
 }
