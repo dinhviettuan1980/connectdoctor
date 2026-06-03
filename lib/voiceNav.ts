@@ -1,6 +1,3 @@
-import { Platform } from "react-native";
-import * as Speech from "expo-speech";
-
 export interface OsrmStep {
   maneuver: { type: string; modifier?: string };
   name: string;
@@ -77,26 +74,4 @@ export function stepsToVietnamese(result: RouteResult): string {
   return [intro, ...parts].join(" ");
 }
 
-export function speakVi(text: string): void {
-  if (Platform.OS === "web") {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "vi-VN";
-    u.rate = 1.0;
-    window.speechSynthesis.speak(u);
-    return;
-  }
-  Speech.stop();
-  Speech.speak(text, { language: "vi-VN", rate: 1.0 });
-}
-
-export function stopSpeaking(): void {
-  if (Platform.OS === "web") {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-    return;
-  }
-  Speech.stop();
-}
+export { speakVi, stopSpeaking } from "./voiceNav.platform";
