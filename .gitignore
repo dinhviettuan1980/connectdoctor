@@ -28,3 +28,8 @@ expo-env.d.ts
 # Cloud Functions — install separately before deploying
 functions/node_modules/
 functions/lib/
+
+# Local diagnostic scripts
+check-page.js
+check-location.js
+design_handoff_heart_dashboard/
