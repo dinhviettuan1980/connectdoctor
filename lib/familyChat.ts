@@ -73,3 +73,22 @@ export function subscribeToFamilyMessages(
 export async function markFamilyThreadRead(threadId: string, selfUid: string): Promise<void> {
   await updateDoc(doc(db, "familyChats", threadId), { [`unread.${selfUid}`]: 0 }).catch(() => {});
 }
+
+export function subscribeToUserFamilyChats(uid: string, callback: (threads: FamilyThread[]) => void): Unsubscribe {
+  const q = query(collection(db, "familyChats"), where("participants", "array-contains", uid));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const threads: FamilyThread[] = snap.docs.map((d) => ({
+        id: d.id,
+        participants: d.data().participants as [string, string],
+        lastMessage: d.data().lastMessage,
+        lastMessageAt: d.data().lastMessageAt,
+        unread: d.data().unread ?? {},
+        names: d.data().names ?? {},
+      }));
+      callback(threads);
+    },
+    () => callback([]),
+  );
+}

@@ -17,7 +17,7 @@ export default function History() {
   return (
     <SafeAreaView className="flex-1 bg-paper">
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <AppBar title="Lịch sử sức khỏe" subtitle="Tất cả các thay đổi" right={<UserMenu />} />
+        <AppBar title="Lịch sử sức khỏe" subtitle="Tất cả các thay đổi" close />
         <View className="flex-row gap-1.5 flex-wrap">
           <Chip variant="accent">Tất cả</Chip>
           <Chip variant="soft">Thuốc</Chip>

@@ -38,13 +38,14 @@ export default function FamilyChat() {
   }, [otherUid]);
 
   useEffect(() => {
-    if (!user || !otherUid || !other) return;
+    if (!user || !otherUid) return;
     let msgUnsub: (() => void) | undefined;
     let readTimer: ReturnType<typeof setTimeout> | undefined;
 
+    // Don't block on `other` loading — use whatever display name we have.
     getOrCreateFamilyThread(
       user.uid, user.displayName ?? "Tôi",
-      otherUid, other.displayName ?? "Người thân",
+      otherUid, other?.displayName ?? "Người thân",
     ).then((tid) => {
       setThreadId(tid);
       msgUnsub = subscribeToFamilyMessages(tid, (msgs) => {
@@ -52,13 +53,13 @@ export default function FamilyChat() {
         setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
       });
       readTimer = setTimeout(() => markFamilyThreadRead(tid, user.uid).catch(() => {}), 1500);
-    });
+    }).catch((e) => console.error("[family-chat thread]", e));
 
     return () => {
       msgUnsub?.();
       clearTimeout(readTimer);
     };
-  }, [user?.uid, otherUid, other?.displayName]);
+  }, [user?.uid, otherUid]);
 
   const send = async () => {
     if (!draft.trim() || !threadId || !user || !otherUid) return;

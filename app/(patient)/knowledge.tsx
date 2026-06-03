@@ -242,7 +242,7 @@ export default function Knowledge() {
   return (
     <SafeAreaView className="flex-1 bg-paper" edges={["top", "left", "right"]}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: currentTrack ? 100 : 16 }}>
-        <AppBar title="Thư giãn & Thiền định" subtitle={`${TRACKS.length} bản nhạc`} right={<UserMenu />} />
+        <AppBar title="Thư giãn" subtitle={`${TRACKS.length} bản nhạc`} close />
 
         {/* Category filter */}
         <ScrollView

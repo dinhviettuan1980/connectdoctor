@@ -50,15 +50,6 @@ export default function PatientLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
-        options={{
-          title: "Lịch sử",
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons name={focused ? "time" : "time-outline"} size={22} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="health"
         options={{
           title: "Sức khoẻ",
@@ -67,31 +58,15 @@ export default function PatientLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Hồ sơ",
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
-          ),
-        }}
-      />
-      {/* Hidden screens kept inside the (patient) group so router knows
-          they exist but they don't appear in the tab bar. */}
-      <Tabs.Screen
-        name="knowledge"
-        options={{
-          title: "Kiến thức",
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons name={focused ? "book" : "book-outline"} size={22} color={color} />
-          ),
-        }}
-      />
+      {/* Routes navigable from UserMenu — hidden from tab bar */}
+      <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="history" options={{ href: null }} />
+      <Tabs.Screen name="knowledge" options={{ href: null }} />
       <Tabs.Screen name="ai" options={{ href: null }} />
       <Tabs.Screen name="chat" options={{ href: null }} />
       <Tabs.Screen name="ocr" options={{ href: null }} />
-      <Tabs.Screen name="family-chat" options={{ href: null }} />
-      <Tabs.Screen name="family-group" options={{ href: null }} />
+      <Tabs.Screen name="family-chat/[uid]" options={{ href: null }} />
+      <Tabs.Screen name="family-group/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

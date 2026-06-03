@@ -266,7 +266,7 @@ export default function PatientProfile() {
         <AppBar
           title="Hồ sơ"
           subtitle="Bệnh nhân"
-          right={<UserMenu />}
+          close
         />
         <TopTabs tabs={TABS} active={tab} onChange={setTab} />
       </View>

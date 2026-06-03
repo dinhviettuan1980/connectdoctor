@@ -65,6 +65,16 @@ export default function PatientHome() {
           </View>
         </Card>
 
+        <Section title="Gợi ý nhanh">
+          <View className="flex-row flex-wrap gap-1.5">
+            {SUGGESTIONS.map((s) => (
+              <Chip key={s} onPress={() => ask(s)}>
+                {s}
+              </Chip>
+            ))}
+          </View>
+        </Section>
+
         <View className="flex-row gap-2">
           <Pressable
             onPress={() => router.push({ pathname: "/(patient)/health", params: { tab: "map", action: "goHome" } } as any)}
@@ -95,16 +105,6 @@ export default function PatientHome() {
             </Card>
           </Pressable>
         </View>
-
-        <Section title="Gợi ý nhanh">
-          <View className="flex-row flex-wrap gap-1.5">
-            {SUGGESTIONS.map((s) => (
-              <Chip key={s} onPress={() => ask(s)}>
-                {s}
-              </Chip>
-            ))}
-          </View>
-        </Section>
 
         <Section title="Bác sỹ gần đây">
           <Card>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View, ActivityIndicator, Platform, StyleSheet } from "react-native";
+import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -41,6 +42,7 @@ async function uploadAvatar(uri: string, uid: string): Promise<string> {
 
 export function UserMenu() {
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
   const [visible, setVisible] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [pickingPhoto, setPickingPhoto] = useState(false);
@@ -197,6 +199,31 @@ export function UserMenu() {
             {ROLE_LABEL[user.role] ?? user.role}
           </Text>
         </View>
+      </View>
+
+      {/* Menu items */}
+      <View className="py-1">
+        <Pressable
+          onPress={() => { close(); router.push("/(patient)/profile" as any); }}
+          className="flex-row items-center gap-3 px-4 py-3 active:bg-paper-2"
+        >
+          <Text className="text-base">👤</Text>
+          <Text className="text-sm font-bold text-ink">Hồ sơ</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { close(); router.push("/(patient)/history" as any); }}
+          className="flex-row items-center gap-3 px-4 py-3 active:bg-paper-2"
+        >
+          <Text className="text-base">🕒</Text>
+          <Text className="text-sm font-bold text-ink">Lịch sử</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { close(); router.push("/(patient)/knowledge" as any); }}
+          className="flex-row items-center gap-3 px-4 py-3 active:bg-paper-2 border-b border-line-soft"
+        >
+          <Text className="text-base">🧘</Text>
+          <Text className="text-sm font-bold text-ink">Thư giãn</Text>
+        </Pressable>
       </View>
 
       {/* Logout */}
