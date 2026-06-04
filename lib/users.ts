@@ -1,9 +1,15 @@
 import {
   collection, doc, getDoc, getDocs, query, where, updateDoc,
-  onSnapshot, serverTimestamp, type Unsubscribe,
+  onSnapshot, serverTimestamp, limit as fbLimit, orderBy,
+  type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { AppUser } from "./types";
+
+export async function listAllUsers(max = 200): Promise<AppUser[]> {
+  const snap = await getDocs(query(collection(db, "users"), fbLimit(max)));
+  return snap.docs.map((d) => d.data() as AppUser);
+}
 
 const ONLINE_WINDOW_MS = 90_000;
 

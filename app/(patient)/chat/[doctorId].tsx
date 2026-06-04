@@ -111,19 +111,6 @@ export default function ChatThread() {
             </Pressable>
           </View>
           <View className="flex-row gap-2 items-center">
-            <Pressable
-              onPress={() => setCallOpen(true)}
-              hitSlop={8}
-              disabled={!threadId}
-              style={{
-                width: 36, height: 36, borderRadius: 18,
-                backgroundColor: "#5eb594",
-                alignItems: "center", justifyContent: "center",
-                opacity: threadId ? 1 : 0.4,
-              }}
-            >
-              <Text style={{ fontSize: 16 }}>📹</Text>
-            </Pressable>
             {d.phone && (
               <Pressable
                 onPress={() => openPhone(d.phone!)}
@@ -224,14 +211,6 @@ export default function ChatThread() {
         </View>
       </KeyboardAvoidingView>
 
-      {threadId && (
-        <VideoCallModal
-          visible={callOpen}
-          room={`connectdoctor-${threadId}`}
-          displayName={user?.displayName ?? "Bệnh nhân"}
-          onClose={() => setCallOpen(false)}
-        />
-      )}
     </SafeAreaView>
   );
 }

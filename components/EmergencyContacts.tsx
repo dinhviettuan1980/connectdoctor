@@ -146,21 +146,31 @@ export function EmergencyContacts({ contacts, onChange }: Props) {
         setShowPicker(false);
         return;
       }
-      const { data } = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name, Contacts.Fields.Emails],
-        pageSize: 0,
-      });
+      // Load contacts in chunks to avoid UI freeze on devices with many contacts
       const flat: ContactPick[] = [];
-      for (const c of data) {
-        if (!c.phoneNumbers?.length) continue;
-        const name = c.name ?? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
-        if (!name) continue;
-        for (const p of c.phoneNumbers) {
-          if (p.number) flat.push({ id: `${c.id}-${p.number}`, name, phone: p.number });
+      let pageOffset = 0;
+      const pageSize = 200;
+      while (true) {
+        const { data, hasNextPage } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
+          pageSize,
+          pageOffset,
+        });
+        for (const c of data) {
+          if (!c.phoneNumbers?.length) continue;
+          const name = c.name ?? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
+          if (!name) continue;
+          for (const p of c.phoneNumbers) {
+            if (p.number) flat.push({ id: `${c.id}-${p.number}`, name, phone: p.number });
+          }
         }
+        // Show partial results immediately so UI is responsive
+        setPhoneContacts([...flat].sort((a, b) => a.name.localeCompare(b.name, "vi")));
+        if (!hasNextPage || data.length === 0) break;
+        pageOffset += pageSize;
+        // Yield to the event loop so React can render the partial list
+        await new Promise((r) => setTimeout(r, 0));
       }
-      flat.sort((a, b) => a.name.localeCompare(b.name, "vi"));
-      setPhoneContacts(flat);
     } catch (e) {
       Alert.alert("Lỗi", "Không đọc được danh bạ.");
       setShowPicker(false);

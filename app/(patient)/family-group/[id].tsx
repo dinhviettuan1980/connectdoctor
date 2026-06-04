@@ -198,17 +198,6 @@ export default function FamilyGroupScreen() {
             <Text className="text-sm font-bold text-ink" numberOfLines={1}>{group.name}</Text>
             <Text className="text-[11px] text-ink-3">{group.members.length} thành viên</Text>
           </Pressable>
-          <Pressable
-            onPress={() => setCallOpen(true)}
-            hitSlop={8}
-            style={{
-              width: 36, height: 36, borderRadius: 18,
-              backgroundColor: "#5eb594",
-              alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 16 }}>📹</Text>
-          </Pressable>
         </View>
 
         {/* Tabs */}
@@ -376,12 +365,6 @@ export default function FamilyGroupScreen() {
         )}
       </KeyboardAvoidingView>
 
-      <VideoCallModal
-        visible={callOpen}
-        room={`connectdoctor-group-${groupId}`}
-        displayName={user?.displayName ?? "Member"}
-        onClose={() => setCallOpen(false)}
-      />
     </SafeAreaView>
   );
 }

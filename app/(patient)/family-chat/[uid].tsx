@@ -118,19 +118,6 @@ export default function FamilyChat() {
             </View>
           </View>
           <View className="flex-row gap-2 items-center">
-            <Pressable
-              onPress={() => setCallOpen(true)}
-              hitSlop={8}
-              disabled={!threadId}
-              style={{
-                width: 36, height: 36, borderRadius: 18,
-                backgroundColor: "#5eb594",
-                alignItems: "center", justifyContent: "center",
-                opacity: threadId ? 1 : 0.4,
-              }}
-            >
-              <Text style={{ fontSize: 16 }}>📹</Text>
-            </Pressable>
             {other?.phone && (
               <Pressable
                 onPress={() => Linking.openURL(`tel:${other.phone!.replace(/\s/g, "")}`).catch(() => {})}
@@ -214,14 +201,6 @@ export default function FamilyChat() {
         </View>
       </KeyboardAvoidingView>
 
-      {threadId && (
-        <VideoCallModal
-          visible={callOpen}
-          room={`connectdoctor-${threadId}`}
-          displayName={user?.displayName ?? "User"}
-          onClose={() => setCallOpen(false)}
-        />
-      )}
     </SafeAreaView>
   );
 }

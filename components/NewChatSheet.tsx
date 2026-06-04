@@ -3,13 +3,13 @@ import {
   View, Text, Pressable, Modal, TextInput, FlatList, ActivityIndicator,
   KeyboardAvoidingView, Platform, Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuthStore } from "@/hooks/useAuth";
-import { getPatientProfile } from "@/lib/patientProfile";
 import { createFamilyGroup, addMember } from "@/lib/familyGroups";
-import type { EmergencyContact, PatientProfile } from "@/lib/types";
+import { listAllUsers } from "@/lib/users";
+import type { AppUser } from "@/lib/types";
 
 interface Props {
   visible: boolean;
@@ -18,12 +18,21 @@ interface Props {
 
 type Mode = "menu" | "newGroup" | "newChat";
 
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0][0]!.toUpperCase();
+  return (parts[parts.length - 2][0]! + parts[parts.length - 1][0]!).toUpperCase();
+}
+
 export function NewChatSheet({ visible, onClose }: Props) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const [mode, setMode] = useState<Mode>("menu");
-  const [profile, setProfile] = useState<PatientProfile | null>(null);
+  const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
 
   // Create group state
   const [groupName, setGroupName] = useState("");
@@ -34,19 +43,25 @@ export function NewChatSheet({ visible, onClose }: Props) {
     if (!visible) return;
     setMode("menu");
     setGroupName("");
+    setQuery("");
     setPicked(new Set());
     if (!user?.uid) return;
     setLoading(true);
-    getPatientProfile(user.uid).then((p) => {
-      setProfile(p);
-      setLoading(false);
-    });
+    listAllUsers(500)
+      .then((list) => setUsers(list.filter((u) => u.uid !== user.uid)))
+      .catch(() => setUsers([]))
+      .finally(() => setLoading(false));
   }, [visible, user?.uid]);
 
-  const linkedContacts = useMemo<EmergencyContact[]>(
-    () => (profile?.emergencyContacts ?? []).filter((c) => c.linkedUid),
-    [profile?.emergencyContacts],
-  );
+  const filteredUsers = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter((u) =>
+      (u.displayName ?? "").toLowerCase().includes(q) ||
+      (u.email ?? "").toLowerCase().includes(q) ||
+      (u.phone ?? "").includes(q)
+    );
+  }, [users, query]);
 
   const togglePick = (uid: string) => {
     setPicked((prev) => {
@@ -57,26 +72,21 @@ export function NewChatSheet({ visible, onClose }: Props) {
     });
   };
 
-  const handleStart1on1 = (c: EmergencyContact) => {
-    if (!c.linkedUid) return;
+  const handleStart1on1 = (u: AppUser) => {
     onClose();
-    router.push(`/(patient)/family-chat/${c.linkedUid}` as any);
+    router.push(`/(patient)/family-chat/${u.uid}` as any);
   };
 
   const handleCreateGroup = async () => {
     const name = groupName.trim();
-    if (!name) {
-      Alert.alert("Thiếu tên nhóm", "Vui lòng đặt tên cho nhóm.");
-      return;
-    }
+    if (!name) { Alert.alert("Thiếu tên nhóm", "Vui lòng đặt tên cho nhóm."); return; }
     if (!user) return;
     setCreating(true);
     try {
       const gid = await createFamilyGroup(name, user.uid, user.displayName ?? "Tôi");
-      // Add picked members
-      const toAdd = linkedContacts.filter((c) => picked.has(c.linkedUid!));
-      for (const c of toAdd) {
-        await addMember(gid, c.linkedUid!, c.name);
+      const toAdd = users.filter((u) => picked.has(u.uid));
+      for (const u of toAdd) {
+        await addMember(gid, u.uid, u.displayName ?? "Thành viên");
       }
       onClose();
       router.push(`/(patient)/family-group/${gid}` as any);
@@ -88,29 +98,34 @@ export function NewChatSheet({ visible, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="formSheet">
-      <SafeAreaView className="flex-1 bg-paper">
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen" statusBarTranslucent>
+      <View style={{ flex: 1, backgroundColor: "#fafaf7", paddingTop: insets.top }}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
           {/* Header */}
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-line-soft">
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#c8c8c2" }}>
             <Pressable
               onPress={() => (mode === "menu" ? onClose() : setMode("menu"))}
-              hitSlop={8}
-              className="w-8 h-8 items-center justify-center rounded-full bg-paper-2"
+              hitSlop={12}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#f1f0ea", alignItems: "center", justifyContent: "center" }}
             >
-              <Text className="text-base text-ink-2">{mode === "menu" ? "✕" : "‹"}</Text>
+              <Text style={{ fontSize: 16, color: "#1a1a1a" }}>{mode === "menu" ? "✕" : "‹"}</Text>
             </Pressable>
-            <Text className="text-sm font-bold text-ink">
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#1a1a1a" }}>
               {mode === "menu" ? "Mới" : mode === "newGroup" ? "Tạo nhóm gia đình" : "Chọn người để chat"}
             </Text>
             {mode === "newGroup" ? (
-              <Pressable onPress={handleCreateGroup} disabled={creating} hitSlop={8}>
+              <Pressable
+                onPress={handleCreateGroup}
+                disabled={creating}
+                hitSlop={12}
+                style={{ backgroundColor: groupName.trim() ? "#5eb594" : "#dceee4", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 }}
+              >
                 {creating
-                  ? <ActivityIndicator size="small" color="#5eb594" />
-                  : <Text className="text-sm font-bold text-accent-ink">Tạo</Text>}
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={{ fontSize: 13, fontWeight: "700", color: groupName.trim() ? "#fff" : "#9aaa9f" }}>Tạo</Text>}
               </Pressable>
             ) : (
-              <View style={{ width: 32 }} />
+              <View style={{ width: 36 }} />
             )}
           </View>
 
@@ -123,7 +138,7 @@ export function NewChatSheet({ visible, onClose }: Props) {
                 <Text style={{ fontSize: 26 }}>👨‍👩‍👧</Text>
                 <View className="flex-1">
                   <Text className="text-sm font-bold text-ink">Tạo nhóm gia đình</Text>
-                  <Text className="text-[11px] text-ink-3">Chat nhóm, gọi video, chia sẻ vị trí</Text>
+                  <Text className="text-[11px] text-ink-3">Chat nhóm, gọi điện, chia sẻ vị trí</Text>
                 </View>
                 <Text className="text-base text-ink-3">›</Text>
               </Pressable>
@@ -133,15 +148,11 @@ export function NewChatSheet({ visible, onClose }: Props) {
               >
                 <Text style={{ fontSize: 26 }}>💬</Text>
                 <View className="flex-1">
-                  <Text className="text-sm font-bold text-ink">Nhắn tin với người thân</Text>
-                  <Text className="text-[11px] text-ink-3">Chat 1-1 với liên hệ đã liên kết</Text>
+                  <Text className="text-sm font-bold text-ink">Nhắn tin 1-1</Text>
+                  <Text className="text-[11px] text-ink-3">Tìm và chat với bất kỳ ai trên ConnectDoctor</Text>
                 </View>
                 <Text className="text-base text-ink-3">›</Text>
               </Pressable>
-
-              <Text className="text-[10px] text-ink-3 text-center mt-4 px-4">
-                Chỉ người thân đã có tài khoản ConnectDoctor và được liên kết (email/số trùng) mới hiện ở đây. Thêm mới trong Hồ sơ → Người thân.
-              </Text>
             </View>
           )}
 
@@ -158,9 +169,18 @@ export function NewChatSheet({ visible, onClose }: Props) {
                   autoFocus
                 />
               </View>
+              <View className="px-4 py-2 border-b border-line-soft">
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Tìm tên, email, số điện thoại…"
+                  placeholderTextColor="#b5b5b5"
+                  style={{ backgroundColor: "#f1f0ea", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: "#1a1a1a" }}
+                />
+              </View>
               <View className="px-4 py-2 flex-row items-center justify-between">
                 <Text className="text-[10px] uppercase tracking-wider font-bold text-ink-3">
-                  THÀNH VIÊN ({picked.size})
+                  ĐÃ CHỌN ({picked.size})
                 </Text>
                 <Text className="text-[10px] text-ink-3">Bạn là chủ nhóm</Text>
               </View>
@@ -168,31 +188,42 @@ export function NewChatSheet({ visible, onClose }: Props) {
                 <View className="flex-1 items-center justify-center">
                   <ActivityIndicator color="#5eb594" />
                 </View>
-              ) : linkedContacts.length === 0 ? (
+              ) : filteredUsers.length === 0 ? (
                 <Text className="text-[11px] text-ink-3 text-center px-6 mt-4">
-                  Chưa có người thân nào liên kết tài khoản. Vào Hồ sơ → Người thân để thêm.
+                  {users.length === 0 ? "Chưa có user nào trên hệ thống." : "Không có kết quả."}
                 </Text>
               ) : (
                 <FlatList
-                  data={linkedContacts}
-                  keyExtractor={(c) => c.id}
+                  data={filteredUsers}
+                  keyExtractor={(u) => u.uid}
                   contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
+                  keyboardShouldPersistTaps="handled"
                   renderItem={({ item }) => {
-                    const checked = picked.has(item.linkedUid!);
+                    const checked = picked.has(item.uid);
                     return (
                       <Pressable
-                        onPress={() => togglePick(item.linkedUid!)}
+                        onPress={() => togglePick(item.uid)}
                         className="flex-row items-center gap-3 py-2.5 border-b border-line-soft"
                       >
-                        <Avatar label={item.name} />
+                        <Avatar label={item.displayName ?? "?"} uri={item.photoURL ?? undefined} />
                         <View className="flex-1">
-                          <Text className="text-xs font-bold text-ink">{item.name}</Text>
-                          {item.relation && <Text className="text-[10px] text-ink-3">{item.relation}</Text>}
+                          <Text className="text-xs font-bold text-ink" numberOfLines={1}>
+                            {item.displayName ?? "Người dùng"}
+                          </Text>
+                          <Text className="text-[10px] text-ink-3" numberOfLines={1}>
+                            {item.email || item.phone || item.uid.slice(0, 8)}
+                          </Text>
                         </View>
                         <View
-                          className={["w-6 h-6 rounded-full border-2 items-center justify-center", checked ? "bg-accent border-accent-ink" : "border-line"].join(" ")}
+                          style={{
+                            width: 24, height: 24, borderRadius: 12,
+                            borderWidth: 2,
+                            borderColor: checked ? "#2f6b54" : "#c8c8c2",
+                            backgroundColor: checked ? "#5eb594" : "transparent",
+                            alignItems: "center", justifyContent: "center",
+                          }}
                         >
-                          {checked && <Text className="text-white text-xs">✓</Text>}
+                          {checked && <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>✓</Text>}
                         </View>
                       </Pressable>
                     );
@@ -204,28 +235,43 @@ export function NewChatSheet({ visible, onClose }: Props) {
 
           {mode === "newChat" && (
             <>
+              <View className="px-4 py-3 border-b border-line-soft">
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Tìm tên, email, số điện thoại…"
+                  placeholderTextColor="#b5b5b5"
+                  style={{ backgroundColor: "#f1f0ea", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: "#1a1a1a" }}
+                  autoFocus
+                />
+              </View>
               {loading ? (
                 <View className="flex-1 items-center justify-center">
                   <ActivityIndicator color="#5eb594" />
                 </View>
-              ) : linkedContacts.length === 0 ? (
+              ) : filteredUsers.length === 0 ? (
                 <Text className="text-[11px] text-ink-3 text-center px-6 mt-8">
-                  Chưa có người thân nào liên kết tài khoản. Vào Hồ sơ → Người thân để thêm.
+                  {users.length === 0 ? "Chưa có user nào." : "Không có kết quả."}
                 </Text>
               ) : (
                 <FlatList
-                  data={linkedContacts}
-                  keyExtractor={(c) => c.id}
+                  data={filteredUsers}
+                  keyExtractor={(u) => u.uid}
                   contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}
+                  keyboardShouldPersistTaps="handled"
                   renderItem={({ item }) => (
                     <Pressable
                       onPress={() => handleStart1on1(item)}
                       className="flex-row items-center gap-3 py-2.5 border-b border-line-soft"
                     >
-                      <Avatar label={item.name} />
+                      <Avatar label={item.displayName ?? "?"} uri={item.photoURL ?? undefined} />
                       <View className="flex-1">
-                        <Text className="text-xs font-bold text-ink">{item.name}</Text>
-                        {item.relation && <Text className="text-[10px] text-ink-3">{item.relation}</Text>}
+                        <Text className="text-xs font-bold text-ink" numberOfLines={1}>
+                          {item.displayName ?? "Người dùng"}
+                        </Text>
+                        <Text className="text-[10px] text-ink-3" numberOfLines={1}>
+                          {item.email || item.phone || item.uid.slice(0, 8)}
+                        </Text>
                       </View>
                       <Text className="text-base text-ink-3">›</Text>
                     </Pressable>
@@ -235,7 +281,7 @@ export function NewChatSheet({ visible, onClose }: Props) {
             </>
           )}
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }

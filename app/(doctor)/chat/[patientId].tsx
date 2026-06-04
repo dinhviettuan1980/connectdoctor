@@ -94,19 +94,6 @@ export default function DoctorChatThread() {
             </Text>
             <Text className="text-[11px] text-ink-3">Bệnh nhân</Text>
           </View>
-          <Pressable
-            onPress={() => setCallOpen(true)}
-            hitSlop={8}
-            disabled={!threadId}
-            style={{
-              width: 36, height: 36, borderRadius: 18,
-              backgroundColor: "#5eb594",
-              alignItems: "center", justifyContent: "center",
-              opacity: threadId ? 1 : 0.4,
-            }}
-          >
-            <Text style={{ fontSize: 16 }}>📹</Text>
-          </Pressable>
         </View>
         <Divider />
 
@@ -168,14 +155,6 @@ export default function DoctorChatThread() {
         </View>
       </KeyboardAvoidingView>
 
-      {threadId && (
-        <VideoCallModal
-          visible={callOpen}
-          room={`connectdoctor-${threadId}`}
-          displayName={user?.displayName ?? "Bác sĩ"}
-          onClose={() => setCallOpen(false)}
-        />
-      )}
     </SafeAreaView>
   );
 }
