@@ -79,6 +79,15 @@ export default function PatientLayout() {
           tabBarBadgeStyle: { backgroundColor: "#5eb594", fontSize: 9, minWidth: 16, height: 16 },
         } : { href: null }}
       />
+      <Tabs.Screen
+        name="lottery"
+        options={{
+          title: "Xổ số",
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "dice" : "dice-outline"} size={22} color={color} />
+          ),
+        }}
+      />
       {/* Routes navigable from UserMenu — hidden from tab bar */}
       <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="history" options={{ href: null }} />

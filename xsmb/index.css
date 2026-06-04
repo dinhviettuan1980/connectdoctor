@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+}
+
+html {
+  font-size: 120%;
+}
+
+.marquee-wrapper {
+  overflow: hidden;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.marquee-track {
+  display: inline-flex;
+  will-change: transform;
+  -webkit-animation: marquee-scroll 20s linear infinite;
+  animation: marquee-scroll 20s linear infinite;
+}
+
+.marquee-track img {
+  height: 28px;
+  width: auto;
+  display: inline-block;
+  mix-blend-mode: multiply;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+@-webkit-keyframes marquee-scroll {
+  0%   { -webkit-transform: translateX(0); transform: translateX(0); }
+  100% { -webkit-transform: translateX(-50%); transform: translateX(-50%); }
+}
+
+@keyframes marquee-scroll {
+  0%   { -webkit-transform: translateX(0); transform: translateX(0); }
+  100% { -webkit-transform: translateX(-50%); transform: translateX(-50%); }
+}
