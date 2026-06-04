@@ -5,39 +5,35 @@
  * Usage:
  *   node scripts/notify.mjs "<subject>" "<body text>"
  *
+ * Telegram goes through the backend /notify endpoint, which already has the
+ * bot + chat_id + SOCKS5 proxy configured (telegram.js). No token needed locally.
+ *
  * Env vars:
- *   TELEGRAM_BOT_TOKEN  — bot token from @BotFather
- *   TELEGRAM_CHAT_ID    — chat id of the recipient (auto-resolved if omitted)
- *   RESEND_API_KEY      — API key from resend.com
+ *   NOTIFY_API_BASE     — backend base url (default: https://api.tuandv.id.vn)
+ *   NOTIFY_SECRET       — shared secret, must match backend (sent as x-notify-secret)
+ *   RESEND_API_KEY      — API key from resend.com (optional email channel)
  *   NOTIFY_EMAIL        — recipient email (default: tuandv@gmail.com)
  */
 
 const subject = process.argv[2] ?? "ConnectDoctor Agent";
 const body = process.argv[3] ?? "";
 const EMAIL = process.env.NOTIFY_EMAIL ?? "tuandv@gmail.com";
-
-async function resolveChatId(token) {
-  if (process.env.TELEGRAM_CHAT_ID) return process.env.TELEGRAM_CHAT_ID;
-  // Fall back: take the most recent chat that messaged the bot
-  const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates`);
-  const json = await res.json();
-  const updates = json.result ?? [];
-  const last = updates[updates.length - 1];
-  return last?.message?.chat?.id ?? last?.my_chat_member?.chat?.id ?? null;
-}
+const API_BASE = process.env.NOTIFY_API_BASE ?? "https://api.tuandv.id.vn";
+const SECRET = process.env.NOTIFY_SECRET ?? "";
 
 async function sendTelegram() {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) { console.log("[notify] TELEGRAM_BOT_TOKEN missing, skipping Telegram"); return; }
-  const chatId = await resolveChatId(token);
-  if (!chatId) { console.log("[notify] no Telegram chat_id (send /start to the bot first)"); return; }
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: `🤖 ${subject}\n\n${body}` }),
-  });
-  const json = await res.json();
-  console.log(json.ok ? "[notify] Telegram sent" : `[notify] Telegram failed: ${JSON.stringify(json)}`);
+  if (!SECRET) { console.log("[notify] NOTIFY_SECRET missing, skipping Telegram"); return; }
+  try {
+    const res = await fetch(`${API_BASE}/notify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-notify-secret": SECRET },
+      body: JSON.stringify({ text: `🤖 ${subject}\n\n${body}` }),
+    });
+    const json = await res.json();
+    console.log(json.ok ? "[notify] Telegram sent" : `[notify] Telegram failed: ${JSON.stringify(json)}`);
+  } catch (err) {
+    console.log(`[notify] Telegram request failed: ${err.message}`);
+  }
 }
 
 async function sendEmail() {
