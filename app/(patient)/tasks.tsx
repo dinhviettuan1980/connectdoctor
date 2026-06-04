@@ -10,6 +10,7 @@ import {
   subscribeToTasks, addTask, updateTask, deleteTask,
   type Task, type TaskStatus,
 } from "@/lib/tasks";
+import { notifyTelegram } from "@/lib/notify";
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   pending: "Chờ làm",
@@ -138,6 +139,7 @@ export default function TasksScreen() {
     setApprovingId(task.id);
     try {
       await updateTask(task.id, { status: "done" });
+      await notifyTelegram("Task đã duyệt ✓", `${task.title}${task.result ? `\n\n${task.result}` : ""}`);
     } finally {
       setApprovingId(null);
     }

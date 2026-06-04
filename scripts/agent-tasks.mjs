@@ -12,6 +12,7 @@
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { notify } from "./notify.mjs";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 
@@ -116,6 +117,8 @@ const [,, cmd, ...args] = process.argv;
     if (!id) { console.error("Usage: agent-tasks.mjs waiting <id> <result>"); process.exit(1); }
     await updateTask(id, { status: "waiting", result, updatedAt: Date.now() }, idToken);
     console.log(`✅ Task ${id} → waiting`);
+    const task = tasks.find((t) => t.id === id);
+    await notify("Task chờ duyệt", `${task?.title ?? id}\n\n${result}`);
     return;
   }
 

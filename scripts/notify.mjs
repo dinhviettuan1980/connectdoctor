@@ -36,14 +36,12 @@ if (existsSync(envPath)) {
   );
 }
 
-const subject = process.argv[2] ?? "ConnectDoctor Agent";
-const body = process.argv[3] ?? "";
 const EMAIL = process.env.NOTIFY_EMAIL ?? fileEnv.NOTIFY_EMAIL ?? "tuandv@gmail.com";
 const API_BASE = process.env.NOTIFY_API_BASE ?? fileEnv.NOTIFY_API_BASE ?? "https://api.tuandv.id.vn";
 // Prototype: default baked in so any machine that pulls the code works without a local .env.
 const SECRET = process.env.NOTIFY_SECRET ?? fileEnv.NOTIFY_SECRET ?? "c3a526524e98a56e26a9f7b04e26e74b99cdac75c980b9db";
 
-async function sendTelegram() {
+async function sendTelegram(subject, body) {
   if (!SECRET) { console.log("[notify] NOTIFY_SECRET missing, skipping Telegram"); return; }
   try {
     const res = await fetch(`${API_BASE}/notify`, {
@@ -58,7 +56,7 @@ async function sendTelegram() {
   }
 }
 
-async function sendEmail() {
+async function sendEmail(subject, body) {
   const key = process.env.RESEND_API_KEY ?? fileEnv.RESEND_API_KEY;
   if (!key) { console.log("[notify] RESEND_API_KEY missing, skipping email"); return; }
   const res = await fetch("https://api.resend.com/emails", {
@@ -75,4 +73,11 @@ async function sendEmail() {
   console.log(json.id ? `[notify] email sent (${json.id})` : `[notify] email failed: ${JSON.stringify(json)}`);
 }
 
-await Promise.allSettled([sendTelegram(), sendEmail()]);
+export async function notify(subject = "ConnectDoctor Agent", body = "") {
+  await Promise.allSettled([sendTelegram(subject, body), sendEmail(subject, body)]);
+}
+
+// Run as CLI when invoked directly: node scripts/notify.mjs "<subject>" "<body>"
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await notify(process.argv[2], process.argv[3] ?? "");
+}
