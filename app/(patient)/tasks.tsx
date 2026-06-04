@@ -51,6 +51,13 @@ function TaskCard({
           <Text className="text-[11px] text-ink-3">{task.description}</Text>
         ) : null}
 
+        {task.progress && task.status !== "done" ? (
+          <View className="flex-row items-center gap-1.5 rounded-lg bg-accent-soft px-2 py-1.5">
+            <Text className="text-[11px]">⏳</Text>
+            <Text className="text-[11px] text-accent-ink flex-1">{task.progress}</Text>
+          </View>
+        ) : null}
+
         {task.result ? (
           <>
             <Divider dashed />

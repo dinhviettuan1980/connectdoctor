@@ -11,6 +11,7 @@ export interface Task {
   title: string;
   description: string;
   status: TaskStatus;
+  progress?: string;     // agent's live progress note while working
   result?: string;       // agent's summary after completing
   commitMessage?: string;
   createdAt: number;

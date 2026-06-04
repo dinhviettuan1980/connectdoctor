@@ -111,6 +111,15 @@ const [,, cmd, ...args] = process.argv;
     return;
   }
 
+  if (cmd === "progress") {
+    const [id, ...noteParts] = args;
+    const note = noteParts.join(" ");
+    if (!id || !note) { console.error("Usage: agent-tasks.mjs progress <id> <note>"); process.exit(1); }
+    await updateTask(id, { progress: note, updatedAt: Date.now() }, idToken);
+    console.log(`✅ Task ${id} progress: ${note}`);
+    return;
+  }
+
   if (cmd === "waiting") {
     const [id, ...resultParts] = args;
     const result = resultParts.join(" ");
