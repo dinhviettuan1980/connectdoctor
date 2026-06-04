@@ -1,18 +1,13 @@
 /**
- * Notify helper — sends a message to Telegram + email when a task is done.
- * Used by the agent at the end of a run.
+ * Notify helper — pings the backend /notify endpoint when a task is done.
+ * The backend sends email (Resend) + best-effort Telegram. Used by the agent.
  *
  * Usage:
  *   node scripts/notify.mjs "<subject>" "<body text>"
  *
- * Telegram goes through the backend /notify endpoint, which already has the
- * bot + chat_id + SOCKS5 proxy configured (telegram.js). No token needed locally.
- *
  * Config from env vars (remote agent) or .env file (local):
  *   NOTIFY_API_BASE     — backend base url (default: https://api.tuandv.id.vn)
  *   NOTIFY_SECRET       — shared secret, must match backend (sent as x-notify-secret)
- *   RESEND_API_KEY      — API key from resend.com (optional email channel)
- *   NOTIFY_EMAIL        — recipient email (default: tuandv@gmail.com)
  */
 
 import { readFileSync, existsSync } from "fs";
@@ -36,45 +31,24 @@ if (existsSync(envPath)) {
   );
 }
 
-const EMAIL = process.env.NOTIFY_EMAIL ?? fileEnv.NOTIFY_EMAIL ?? "tuandv@gmail.com";
 const API_BASE = process.env.NOTIFY_API_BASE ?? fileEnv.NOTIFY_API_BASE ?? "https://api.tuandv.id.vn";
 // Prototype: default baked in so any machine that pulls the code works without a local .env.
 const SECRET = process.env.NOTIFY_SECRET ?? fileEnv.NOTIFY_SECRET ?? "c3a526524e98a56e26a9f7b04e26e74b99cdac75c980b9db";
 
-async function sendTelegram(subject, body) {
-  if (!SECRET) { console.log("[notify] NOTIFY_SECRET missing, skipping Telegram"); return; }
+export async function notify(subject = "ConnectDoctor Agent", body = "") {
   try {
     const res = await fetch(`${API_BASE}/notify`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-notify-secret": SECRET },
-      body: JSON.stringify({ text: `🤖 ${subject}\n\n${body}` }),
+      body: JSON.stringify({ subject, body }),
     });
     const json = await res.json();
-    console.log(json.ok ? "[notify] Telegram sent" : `[notify] Telegram failed: ${JSON.stringify(json)}`);
+    console.log(json.ok
+      ? `[notify] sent (email=${json.email}, telegram=${json.telegram})`
+      : `[notify] failed: ${JSON.stringify(json)}`);
   } catch (err) {
-    console.log(`[notify] Telegram request failed: ${err.message}`);
+    console.log(`[notify] request failed: ${err.message}`);
   }
-}
-
-async function sendEmail(subject, body) {
-  const key = process.env.RESEND_API_KEY ?? fileEnv.RESEND_API_KEY;
-  if (!key) { console.log("[notify] RESEND_API_KEY missing, skipping email"); return; }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      from: "ConnectDoctor Agent <onboarding@resend.dev>",
-      to: [EMAIL],
-      subject,
-      html: `<h2>${subject}</h2><pre style="font-family:inherit;white-space:pre-wrap">${body}</pre>`,
-    }),
-  });
-  const json = await res.json();
-  console.log(json.id ? `[notify] email sent (${json.id})` : `[notify] email failed: ${JSON.stringify(json)}`);
-}
-
-export async function notify(subject = "ConnectDoctor Agent", body = "") {
-  await Promise.allSettled([sendTelegram(subject, body), sendEmail(subject, body)]);
 }
 
 // Run as CLI when invoked directly: node scripts/notify.mjs "<subject>" "<body>"
