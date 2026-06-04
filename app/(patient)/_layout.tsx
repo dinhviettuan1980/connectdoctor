@@ -3,10 +3,13 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/hooks/useAuth";
 import { subscribeToThreads } from "@/lib/chat";
+import { subscribeToTasks } from "@/lib/tasks";
 
 export default function PatientLayout() {
   const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === "admin";
   const [totalUnread, setTotalUnread] = useState(0);
+  const [pendingTasks, setPendingTasks] = useState(0);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -14,6 +17,13 @@ export default function PatientLayout() {
       setTotalUnread(threads.reduce((s, t) => s + (t.unreadForPatient ?? 0), 0));
     });
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    return subscribeToTasks((tasks) => {
+      setPendingTasks(tasks.filter((t) => t.status === "pending" || t.status === "waiting").length);
+    });
+  }, [isAdmin]);
 
   return (
     <Tabs
@@ -57,6 +67,17 @@ export default function PatientLayout() {
             <Ionicons name={focused ? "heart" : "heart-outline"} size={22} color={color} />
           ),
         }}
+      />
+      <Tabs.Screen
+        name="tasks"
+        options={isAdmin ? {
+          title: "Giao việc",
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "clipboard" : "clipboard-outline"} size={22} color={color} />
+          ),
+          tabBarBadge: pendingTasks > 0 ? pendingTasks : undefined,
+          tabBarBadgeStyle: { backgroundColor: "#5eb594", fontSize: 9, minWidth: 16, height: 16 },
+        } : { href: null }}
       />
       {/* Routes navigable from UserMenu — hidden from tab bar */}
       <Tabs.Screen name="profile" options={{ href: null }} />

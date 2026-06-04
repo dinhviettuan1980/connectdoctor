@@ -250,5 +250,14 @@ service cloud.firestore {
           request.auth.uid in get(/databases/$(database)/documents/familyGroups/$(groupId)).data.members;
       }
     }
+
+    // ─── /tasks/{id} ─────────────────────────────────────────────────────────
+    // Admin ↔ agent task workflow. Authenticated users can read (agent needs it),
+    // only admin can write.
+
+    match /tasks/{id} {
+      allow read: if isAuthed();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }
