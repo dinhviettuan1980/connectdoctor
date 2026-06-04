@@ -3,6 +3,8 @@ import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
+export { autoReviewCommits } from "./commitReview";
+
 const db = admin.firestore();
 const messaging = admin.messaging();
 
