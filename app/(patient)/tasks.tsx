@@ -63,7 +63,7 @@ function TaskCard({
           </>
         ) : null}
 
-        <View className="flex-row gap-2 mt-1">
+        <View className="flex-row items-center gap-2 mt-1">
           {task.status === "pending" && (
             <>
               <Button size="sm" variant="secondary" onPress={() => onEdit(task)}>
@@ -75,9 +75,11 @@ function TaskCard({
             </>
           )}
           {task.status === "waiting" && (
-            <Button size="sm" variant="primary" onPress={() => onApprove(task)}>
-              ✓ OK — Commit & Done
-            </Button>
+            <View className="flex-1 items-center">
+              <Button size="sm" variant="primary" onPress={() => onApprove(task)}>
+                ✓ OK — Commit & Done
+              </Button>
+            </View>
           )}
           <Text className="text-[10px] text-ink-4 self-center ml-auto font-mono">
             {new Date(task.createdAt).toLocaleDateString("vi-VN")}
