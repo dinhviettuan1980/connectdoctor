@@ -40,7 +40,8 @@ const subject = process.argv[2] ?? "ConnectDoctor Agent";
 const body = process.argv[3] ?? "";
 const EMAIL = process.env.NOTIFY_EMAIL ?? fileEnv.NOTIFY_EMAIL ?? "tuandv@gmail.com";
 const API_BASE = process.env.NOTIFY_API_BASE ?? fileEnv.NOTIFY_API_BASE ?? "https://api.tuandv.id.vn";
-const SECRET = process.env.NOTIFY_SECRET ?? fileEnv.NOTIFY_SECRET ?? "";
+// Prototype: default baked in so any machine that pulls the code works without a local .env.
+const SECRET = process.env.NOTIFY_SECRET ?? fileEnv.NOTIFY_SECRET ?? "c3a526524e98a56e26a9f7b04e26e74b99cdac75c980b9db";
 
 async function sendTelegram() {
   if (!SECRET) { console.log("[notify] NOTIFY_SECRET missing, skipping Telegram"); return; }
