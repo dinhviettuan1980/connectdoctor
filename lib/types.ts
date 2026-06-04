@@ -138,6 +138,7 @@ export interface ChatMessage {
   toUid: string;
   text?: string;
   imageUrl?: string;
+  audioUrl?: string;
   createdAt: number;
   readAt?: number;
 }
