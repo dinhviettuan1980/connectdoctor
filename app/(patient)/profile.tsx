@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  View, Text, ScrollView, Pressable, TextInput, FlatList,
+  View, Text, ScrollView, Pressable, TextInput, FlatList, Linking,
   Modal, Image, ActivityIndicator, Alert, useWindowDimensions,
   KeyboardAvoidingView, Platform,
 } from "react-native";
@@ -523,14 +523,27 @@ function InfoTab() {
         }
       >
         {profile.homeAddress ? (
-          <View className="flex-row items-start gap-2">
-            <Text className="text-base">🏠</Text>
-            <View className="flex-1">
-              <Text className="text-xs text-ink" numberOfLines={2}>{profile.homeAddress.label}</Text>
-              <Text className="font-mono text-[10px] text-ink-3 mt-0.5">
-                {profile.homeAddress.lat.toFixed(5)}, {profile.homeAddress.lng.toFixed(5)}
-              </Text>
+          <View className="gap-2">
+            <View className="flex-row items-start gap-2">
+              <Text className="text-base">🏠</Text>
+              <View className="flex-1">
+                <Text className="text-xs text-ink" numberOfLines={2}>{profile.homeAddress.label}</Text>
+                <Text className="font-mono text-[10px] text-ink-3 mt-0.5">
+                  {profile.homeAddress.lat.toFixed(5)}, {profile.homeAddress.lng.toFixed(5)}
+                </Text>
+              </View>
             </View>
+            <Button
+              variant="secondary"
+              size="sm"
+              block
+              onPress={() => {
+                const { lat, lng } = profile.homeAddress!;
+                Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+              }}
+            >
+              🧭 Chỉ đường về nhà
+            </Button>
           </View>
         ) : (
           <Text className="text-[11px] text-ink-3">Chưa đặt. Nhấn Thêm để tìm địa chỉ.</Text>
