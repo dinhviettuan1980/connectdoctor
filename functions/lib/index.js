@@ -33,15 +33,16 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onNewChatMessage = void 0;
+exports.onNewChatMessage = exports.autoReviewCommits = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
+var commitReview_1 = require("./commitReview");
+Object.defineProperty(exports, "autoReviewCommits", { enumerable: true, get: function () { return commitReview_1.autoReviewCommits; } });
 const db = admin.firestore();
 const messaging = admin.messaging();
 exports.onNewChatMessage = (0, firestore_1.onDocumentCreated)("/chatThreads/{threadId}/messages/{msgId}", async (event) => {
-    var _a, _b, _c, _d;
-    const message = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
+    const message = event.data?.data();
     if (!message)
         return;
     const { toUid, fromUid, text } = message;
@@ -52,12 +53,12 @@ exports.onNewChatMessage = (0, firestore_1.onDocumentCreated)("/chatThreads/{thr
     const recipient = recipientSnap.data();
     if (!recipient)
         return;
-    const senderName = (_c = (_b = senderSnap.data()) === null || _b === void 0 ? void 0 : _b.displayName) !== null && _c !== void 0 ? _c : "Ai đó";
-    const body = (text === null || text === void 0 ? void 0 : text.trim()) || "Đã gửi một tin nhắn";
+    const senderName = senderSnap.data()?.displayName ?? "Ai đó";
+    const body = text?.trim() || "Đã gửi một tin nhắn";
     const threadId = event.params.threadId;
     const sends = [];
     // ── Expo Push (iOS / Android) ─────────────────────────────────────────────
-    if ((_d = recipient.expoPushToken) === null || _d === void 0 ? void 0 : _d.startsWith("ExponentPushToken")) {
+    if (recipient.expoPushToken?.startsWith("ExponentPushToken")) {
         sends.push(fetch("https://exp.host/--/api/v2/push/send", {
             method: "POST",
             headers: {
