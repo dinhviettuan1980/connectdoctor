@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Audio } from "expo-av";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -26,13 +27,30 @@ import { formatTime } from "@/lib/time";
 import type { ChatMessage } from "@/lib/types";
 import VideoCallModal from "@/components/VideoCallModal";
 
+const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
+
+async function uploadAudio(uid: string, uri: string): Promise<string> {
+  const key = `chat-audio/${uid}/${Date.now()}.m4a`;
+  const res = await fetch(uri);
+  const blob = await res.blob();
+  const form = new FormData();
+  form.append("file", blob, `audio_${Date.now()}.m4a`);
+  form.append("key", key);
+  const up = await fetch(`${STORAGE_URL}/upload`, { method: "POST", body: form });
+  if (!up.ok) throw new Error("Audio upload failed");
+  const { url } = (await up.json()) as { url: string };
+  return url;
+}
+
+function fmtSecs(s: number): string {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 export default function DoctorChatThread() {
   const router = useRouter();
   const { patientId } = useLocalSearchParams<{ patientId: string }>();
   const user = useAuthStore((s) => s.user);
 
-  // patientName can be passed as a route param (from messages list) or fetched from Firestore.
-  // Using patientId as fallback label for the avatar.
   const { patientName = "Bệnh nhân" } = useLocalSearchParams<{ patientName?: string }>();
 
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -41,6 +59,13 @@ export default function DoctorChatThread() {
   const [sending, setSending] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [recordingSecs, setRecordingSecs] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval>>();
+
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
     if (!user || !patientId) return;
@@ -61,6 +86,12 @@ export default function DoctorChatThread() {
     return () => msgUnsub?.();
   }, [user?.uid, patientId]);
 
+  useEffect(() => {
+    return () => {
+      soundRef.current?.unloadAsync().catch(() => {});
+    };
+  }, []);
+
   const send = async () => {
     if (!draft.trim() || !threadId || !user || !patientId) return;
     const text = draft.trim();
@@ -70,6 +101,68 @@ export default function DoctorChatThread() {
       await sendMessage(threadId, user.uid, patientId, text);
     } finally {
       setSending(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) return;
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const rec = new Audio.Recording();
+      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await rec.startAsync();
+      setRecording(rec);
+      setRecordingSecs(0);
+      timerRef.current = setInterval(() => setRecordingSecs((s) => s + 1), 1000);
+    } catch (e) {
+      console.error("[startRecording]", e);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+    clearInterval(timerRef.current);
+    setRecordingSecs(0);
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recording.getURI();
+      setRecording(null);
+      if (uri && threadId && user && patientId) {
+        setSending(true);
+        try {
+          const audioUrl = await uploadAudio(user.uid, uri);
+          await sendMessage(threadId, user.uid, patientId, "", undefined, audioUrl);
+        } catch (e) {
+          console.error("[sendAudio]", e);
+        } finally {
+          setSending(false);
+        }
+      }
+    } catch (e) {
+      console.error("[stopRecording]", e);
+      setRecording(null);
+    }
+  };
+
+  const toggleAudio = async (msgId: string, url: string) => {
+    if (playingId === msgId) {
+      await soundRef.current?.pauseAsync();
+      setPlayingId(null);
+      return;
+    }
+    soundRef.current?.unloadAsync().catch(() => {});
+    setPlayingId(msgId);
+    try {
+      const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
+      soundRef.current = sound;
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) setPlayingId(null);
+      });
+    } catch (e) {
+      console.error("[playAudio]", e);
+      setPlayingId(null);
     }
   };
 
@@ -122,7 +215,22 @@ export default function DoctorChatThread() {
                       : "bg-paper border-line rounded-bl-sm",
                   ].join(" ")}
                 >
-                  <Text className="text-xs text-ink">{m.text}</Text>
+                  {m.audioUrl ? (
+                    <Pressable
+                      onPress={() => toggleAudio(m.id, m.audioUrl!)}
+                      className="flex-row items-center gap-2"
+                    >
+                      <Text className="text-base">
+                        {playingId === m.id ? "⏸️" : "▶️"}
+                      </Text>
+                      <View>
+                        <Text className="text-xs font-bold text-ink">Tin nhắn thoại</Text>
+                        <Text className="text-[10px] text-ink-3">Nhấn để nghe</Text>
+                      </View>
+                    </Pressable>
+                  ) : (
+                    <Text className="text-xs text-ink">{m.text}</Text>
+                  )}
                 </View>
                 <Text
                   className="text-[10px] text-ink-3 mt-0.5"
@@ -137,21 +245,59 @@ export default function DoctorChatThread() {
 
         {/* Input bar */}
         <View className="flex-row items-center gap-2 px-3 py-2 border-t border-line">
-          <View className="flex-1 border border-line bg-paper rounded-full px-3 py-1.5">
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Nhập tin nhắn…"
-              placeholderTextColor="#b5b5b5"
-              className="text-sm text-ink"
-              onSubmitEditing={send}
-              returnKeyType="send"
-              editable={!!threadId && !sending}
-            />
-          </View>
-          <Button variant="primary" size="sm" onPress={send} disabled={sending || !threadId}>
-            {sending ? "…" : "↑"}
-          </Button>
+          {recording ? (
+            <View className="flex-1 flex-row items-center gap-2 border border-danger bg-paper rounded-full px-3 py-1.5">
+              <View className="w-2 h-2 rounded-full bg-danger" />
+              <Text className="text-xs font-mono text-danger flex-1">{fmtSecs(recordingSecs)} đang ghi…</Text>
+              <Pressable onPress={stopRecording} hitSlop={8}>
+                <Text className="text-xs text-ink-3">Hủy</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View className="flex-1 border border-line bg-paper rounded-full px-3 py-1.5">
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Nhập tin nhắn…"
+                placeholderTextColor="#b5b5b5"
+                className="text-sm text-ink"
+                onSubmitEditing={send}
+                returnKeyType="send"
+                editable={!!threadId && !sending}
+              />
+            </View>
+          )}
+
+          {recording ? (
+            <Pressable
+              onPress={stopRecording}
+              disabled={sending}
+              style={{
+                width: 36, height: 36, borderRadius: 18,
+                backgroundColor: "#c3604a",
+                alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 14 }}>⬛</Text>
+            </Pressable>
+          ) : draft.trim() ? (
+            <Button variant="primary" size="sm" onPress={send} disabled={sending || !threadId}>
+              {sending ? "…" : "↑"}
+            </Button>
+          ) : (
+            <Pressable
+              onPress={startRecording}
+              disabled={!threadId || sending}
+              style={{
+                width: 36, height: 36, borderRadius: 18,
+                backgroundColor: "#dceee4",
+                alignItems: "center", justifyContent: "center",
+                opacity: (!threadId || sending) ? 0.5 : 1,
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>🎤</Text>
+            </Pressable>
+          )}
         </View>
       </KeyboardAvoidingView>
 

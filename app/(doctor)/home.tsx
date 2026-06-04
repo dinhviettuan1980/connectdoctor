@@ -1,5 +1,6 @@
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { AppBar } from "@/components/AppBar";
 import { Card } from "@/components/ui/Card";
 import { UserMenu } from "@/components/UserMenu";
@@ -10,6 +11,7 @@ import { useAuthStore } from "@/hooks/useAuth";
 
 export default function DoctorHome() {
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
   return (
     <SafeAreaView className="flex-1 bg-paper">
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -28,10 +30,13 @@ export default function DoctorHome() {
             <Text className="text-[10px] uppercase tracking-wider text-ink-3">Lịch hẹn</Text>
             <Text className="font-mono font-bold text-2xl text-ink">3</Text>
           </Card>
-          <Card padding="sm" className="flex-1">
-            <Text className="text-[10px] uppercase tracking-wider text-ink-3">BN đang theo</Text>
-            <Text className="font-mono font-bold text-2xl text-ink">42</Text>
-          </Card>
+          <Pressable className="flex-1" onPress={() => router.push("/(doctor)/weekday-stats" as any)}>
+            <Card padding="sm" className="flex-1">
+              <Text className="text-[10px] uppercase tracking-wider text-ink-3">BN đang theo</Text>
+              <Text className="font-mono font-bold text-2xl text-ink">42</Text>
+              <Text className="text-[10px] text-accent-ink mt-0.5">Xem thống kê →</Text>
+            </Card>
+          </Pressable>
         </View>
 
         <Section title="Bệnh nhân chờ trả lời">

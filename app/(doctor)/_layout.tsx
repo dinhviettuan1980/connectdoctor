@@ -53,6 +53,7 @@ export default function DoctorLayout() {
         }}
       />
       <Tabs.Screen name="chat" options={{ href: null }} />
+      <Tabs.Screen name="weekday-stats" options={{ href: null }} />
     </Tabs>
   );
 }

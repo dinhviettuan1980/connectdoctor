@@ -102,6 +102,7 @@ export async function sendMessage(
   toUid: string,
   text: string,
   imageUrl?: string,
+  audioUrl?: string,
 ): Promise<void> {
   const [patientUid] = threadId.split("_");
   const isFromPatient = fromUid === patientUid;
@@ -112,12 +113,14 @@ export async function sendMessage(
     toUid,
     text,
     imageUrl: imageUrl ?? null,
+    audioUrl: audioUrl ?? null,
     createdAt: now,
     readAt: null,
   });
 
+  const lastMessage = audioUrl ? "🎤 Tin nhắn thoại" : text;
   await updateDoc(doc(db, "chatThreads", threadId), {
-    lastMessage: text,
+    lastMessage,
     lastMessageAt: now,
     ...(isFromPatient
       ? { unreadForDoctor: increment(1) }
@@ -144,6 +147,7 @@ export function subscribeToMessages(
         toUid: d.data().toUid as string,
         text: d.data().text as string | undefined,
         imageUrl: d.data().imageUrl as string | undefined,
+        audioUrl: d.data().audioUrl as string | undefined,
         createdAt: d.data().createdAt as number,
         readAt: d.data().readAt as number | undefined,
       }));
