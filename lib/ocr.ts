@@ -39,8 +39,45 @@ export async function extractMedsFromImage(imageUri: string): Promise<Partial<Me
   }
 }
 
-export async function extractMetricsFromImage(_imageUri: string): Promise<Partial<MetricEntry>[]> {
-  return mockMetrics();
+export async function extractMetricsFromImage(imageUri: string): Promise<Partial<MetricEntry>[]> {
+  if (!GEMINI_KEY) return mockMetrics();
+  const base64 = await uriToBase64(imageUri);
+  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType: "image/jpeg", data: base64 } },
+            {
+              text:
+                "Đọc kết quả xét nghiệm hoặc chỉ số sức khoẻ trong ảnh. " +
+                "Trả lời JSON: " +
+                '{"metrics":[{"label":"...","value":"...","unit":"...","type":"blood_test|blood_pressure|cholesterol|glucose|other"}]}',
+            },
+          ],
+        },
+      ],
+      generationConfig: { responseMimeType: "application/json" },
+    }),
+  });
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+  try {
+    const now = Date.now();
+    const items = JSON.parse(text).metrics as Array<{ label: string; value: string; unit: string; type: string }>;
+    return (items ?? []).map((m) => ({
+      type: m.type as MetricEntry["type"],
+      label: m.label,
+      value: m.value,
+      unit: m.unit,
+      measuredAt: now,
+    }));
+  } catch {
+    return mockMetrics();
+  }
 }
 
 async function uriToBase64(uri: string): Promise<string> {

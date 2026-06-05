@@ -259,5 +259,14 @@ service cloud.firestore {
       allow read: if isAuthed();
       allow create, update, delete: if isAdmin();
     }
+
+    // ─── /repos/{id} ─────────────────────────────────────────────────────────
+    // GitHub repo registry used by agent and commit-review function.
+    // Any authenticated user can read; only admin can write.
+
+    match /repos/{id} {
+      allow read: if isAuthed();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

@@ -14,6 +14,7 @@ export interface Task {
   progress?: string;     // agent's live progress note while working
   result?: string;       // agent's summary after completing
   commitMessage?: string;
+  repos?: string[];      // repo IDs this task is associated with
   createdAt: number;
   updatedAt: number;
 }
@@ -27,10 +28,11 @@ export function subscribeToTasks(callback: (tasks: Task[]) => void): () => void 
   );
 }
 
-export async function addTask(title: string, description: string): Promise<string> {
+export async function addTask(title: string, description: string, repos: string[] = []): Promise<string> {
   const ref = await addDoc(collection(db, "tasks"), {
     title,
     description,
+    repos,
     status: "pending" as TaskStatus,
     createdAt: Date.now(),
     updatedAt: Date.now(),

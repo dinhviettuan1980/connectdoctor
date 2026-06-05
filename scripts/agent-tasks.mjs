@@ -113,6 +113,13 @@ const [,, cmd, ...args] = process.argv;
     return;
   }
 
+  if (cmd === "all-pending") {
+    const pending = tasks.filter((t) => t.status === "pending");
+    if (!pending.length) { console.log("[]"); return; }
+    console.log(JSON.stringify(pending));
+    return;
+  }
+
   if (cmd === "progress") {
     const [id, ...noteParts] = args;
     const note = noteParts.join(" ");
