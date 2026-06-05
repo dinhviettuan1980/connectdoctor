@@ -96,7 +96,9 @@ const [,, cmd, ...args] = process.argv;
     console.log("\n📋 TASKS\n");
     for (const t of tasks) {
       const icon = t.status === "pending" ? "⏳" : t.status === "waiting" ? "👀" : "✅";
-      console.log(`${icon} [${t.id.slice(0, 8)}] ${t.title} — ${t.status.toUpperCase()}`);
+      // Use full ID — truncating caused agents to create ghost docs with
+      // the prefix as the document ID, polluting the collection.
+      console.log(`${icon} [${t.id}] ${t.title} — ${t.status.toUpperCase()}`);
       if (t.description) console.log(`   ${t.description}`);
       if (t.result) console.log(`   ✍ ${t.result}`);
     }
