@@ -654,6 +654,7 @@ function InfoTab() {
 
 function MedsTab() {
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -738,6 +739,11 @@ function MedsTab() {
       {/* Create button */}
       <Button variant="primary" block onPress={handleCreate} loading={creating}>
         + Tạo đơn thuốc mới
+      </Button>
+
+      {/* OCR: đọc đơn thuốc từ ảnh bằng AI (chụp/chọn → nhận diện → xác nhận) */}
+      <Button block onPress={() => router.push("/(patient)/ocr/upload?kind=meds")}>
+        🤖 Đọc đơn thuốc từ ảnh (AI)
       </Button>
 
       {/* Empty state */}

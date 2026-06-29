@@ -1,117 +1,69 @@
-// OCR helper — currently returns mock data.
-// Gemini path kept for meds; metrics OCR will be revisited later.
+// OCR helper — dùng Groq vision qua OCR service (key giữ ở server, không lộ ở client).
+// Endpoint: POST /prescription (đơn thuốc), POST /labtest (chỉ số xét nghiệm).
 
+import { Platform } from "react-native";
 import type { Medication, MetricEntry } from "./types";
 
-const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+// Ánh xạ 'type' từ backend -> MetricType của app.
+const TYPE_MAP: Record<string, MetricEntry["type"]> = {
+  blood_test: "blood_test",
+  blood_pressure: "blood_pressure",
+  cholesterol: "cholesterol",
+  glucose: "blood_glucose",
+  blood_glucose: "blood_glucose",
+  heart_rate: "heart_rate",
+  urine_test: "urine_test",
+  other: "custom",
+};
+
+const OCR_API =
+  process.env.EXPO_PUBLIC_OCR_API || "https://tuandv80-ocr-numbers.hf.space";
+
+async function postImage(endpoint: string, imageUri: string): Promise<any> {
+  const fd = new FormData();
+  if (Platform.OS === "web") {
+    const blob = await (await fetch(imageUri)).blob();
+    fd.append("file", blob, "image.jpg");
+  } else {
+    // React Native: append dạng { uri, name, type }
+    fd.append("file", { uri: imageUri, name: "image.jpg", type: "image/jpeg" } as any);
+  }
+  const res = await fetch(`${OCR_API}/${endpoint}`, { method: "POST", body: fd });
+  if (!res.ok) throw new Error(`OCR ${endpoint} HTTP ${res.status}`);
+  return res.json();
+}
 
 export async function extractMedsFromImage(imageUri: string): Promise<Partial<Medication>[]> {
-  if (!GEMINI_KEY) return mockMeds();
-  const base64 = await uriToBase64(imageUri);
-  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { inlineData: { mimeType: "image/jpeg", data: base64 } },
-            {
-              text:
-                "Đọc đơn thuốc trong ảnh. Trả lời JSON: " +
-                '{"meds":[{"name":"...","dose":"...","category":"..."}]}',
-            },
-          ],
-        },
-      ],
-      generationConfig: { responseMimeType: "application/json" },
-    }),
-  });
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
   try {
-    return (JSON.parse(text).meds as Partial<Medication>[]) ?? [];
-  } catch {
-    return mockMeds();
+    const data = await postImage("prescription", imageUri);
+    return (data.meds || [])
+      .filter((m: any) => m?.name)
+      .map((m: any) => {
+        const qty = [m.quantity, m.unit].filter(Boolean).join(" ").trim();
+        const dose = [m.dose, qty && `SL ${qty}`].filter(Boolean).join(" · ");
+        return { name: m.name, dose, category: m.category || undefined };
+      });
+  } catch (e) {
+    console.warn("extractMedsFromImage error", e);
+    return [];
   }
 }
 
 export async function extractMetricsFromImage(imageUri: string): Promise<Partial<MetricEntry>[]> {
-  if (!GEMINI_KEY) return mockMetrics();
-  const base64 = await uriToBase64(imageUri);
-  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { inlineData: { mimeType: "image/jpeg", data: base64 } },
-            {
-              text:
-                "Đọc kết quả xét nghiệm hoặc chỉ số sức khoẻ trong ảnh. " +
-                "Trả lời JSON: " +
-                '{"metrics":[{"label":"...","value":"...","unit":"...","type":"blood_test|blood_pressure|cholesterol|glucose|other"}]}',
-            },
-          ],
-        },
-      ],
-      generationConfig: { responseMimeType: "application/json" },
-    }),
-  });
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
   try {
+    const data = await postImage("labtest", imageUri);
     const now = Date.now();
-    const items = JSON.parse(text).metrics as Array<{ label: string; value: string; unit: string; type: string }>;
-    return (items ?? []).map((m) => ({
-      type: m.type as MetricEntry["type"],
-      label: m.label,
-      value: m.value,
-      unit: m.unit,
-      measuredAt: now,
-    }));
-  } catch {
-    return mockMetrics();
+    return (data.metrics || [])
+      .filter((m: any) => m?.label)
+      .map((m: any) => ({
+        type: TYPE_MAP[m.type] || "custom",
+        label: m.label,
+        value: [m.value, m.unit].filter(Boolean).join(" "),
+        unit: m.unit || undefined,
+        measuredAt: now,
+      }));
+  } catch (e) {
+    console.warn("extractMetricsFromImage error", e);
+    return [];
   }
-}
-
-async function uriToBase64(uri: string): Promise<string> {
-  if (uri.startsWith("data:")) return uri.split(",")[1];
-  const res = await fetch(uri);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",")[1]);
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
-
-function mockMeds(): Partial<Medication>[] {
-  return [
-    { name: "Amlodipin 5mg", dose: "1 viên / sáng", category: "Huyết áp" },
-    { name: "Metformin 500mg", dose: "2 viên × 2 / ngày", category: "Tiểu đường" },
-    { name: "Atorvastatin 20mg", dose: "1 viên / tối", category: "Mỡ máu" },
-    { name: "Vitamin D3", dose: "1 giọt / sáng", category: "Bổ sung" },
-    { name: "Aspirin 81mg", dose: "1 viên / sáng", category: "Tim mạch" },
-  ];
-}
-
-function mockMetrics(): Partial<MetricEntry>[] {
-  const now = Date.now();
-  return [
-    { type: "blood_test", label: "Glucose", value: "5.4", unit: "mmol/L", measuredAt: now },
-    { type: "blood_test", label: "HbA1c", value: "6.4", unit: "%", measuredAt: now },
-    { type: "cholesterol", label: "LDL-C", value: "3.1", unit: "mmol/L", measuredAt: now },
-    { type: "cholesterol", label: "HDL-C", value: "1.2", unit: "mmol/L", measuredAt: now },
-    { type: "blood_test", label: "Triglycerid", value: "1.8", unit: "mmol/L", measuredAt: now },
-    { type: "blood_test", label: "ALT", value: "24", unit: "U/L", measuredAt: now },
-    { type: "blood_test", label: "Creatinin", value: "85", unit: "µmol/L", measuredAt: now },
-    { type: "blood_test", label: "eGFR", value: "95", unit: "", measuredAt: now },
-  ];
 }
