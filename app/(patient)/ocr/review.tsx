@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, ScrollView, Image, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Image, ActivityIndicator, TextInput, Pressable, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AppBar } from "@/components/AppBar";
@@ -7,38 +7,81 @@ import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { Button } from "@/components/ui/Button";
 import { extractMedsFromImage, extractMetricsFromImage } from "@/lib/ocr";
-import type { Medication, MetricEntry } from "@/lib/types";
+import { useAuthStore } from "@/hooks/useAuth";
+import { createPrescription, addImageToPrescription, updatePrescriptionNote } from "@/lib/prescriptions";
+import { addMetric } from "@/lib/metrics";
+import type { Medication, MetricEntry, MetricType } from "@/lib/types";
+
+const inputCls = "border border-line-soft rounded-lg px-2.5 py-1.5 text-xs text-ink bg-paper";
 
 export default function OcrReview() {
   const router = useRouter();
   const { uri, kind } = useLocalSearchParams<{ uri: string; kind: string }>();
+  const user = useAuthStore((s) => s.user);
+  const isMeds = kind !== "metrics";
+
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [meds, setMeds] = useState<Partial<Medication>[]>([]);
   const [metrics, setMetrics] = useState<Partial<MetricEntry>[]>([]);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      if (kind === "metrics") {
-        setMetrics(await extractMetricsFromImage(uri));
-      } else {
-        setMeds(await extractMedsFromImage(uri));
-      }
+      if (isMeds) setMeds(await extractMedsFromImage(uri));
+      else setMetrics(await extractMetricsFromImage(uri));
       setLoading(false);
     })();
   }, [uri, kind]);
 
-  const isMeds = kind !== "metrics";
+  // ── editors ──
+  const updMed = (i: number, k: keyof Medication, v: string) =>
+    setMeds((p) => p.map((m, idx) => (idx === i ? { ...m, [k]: v } : m)));
+  const delMed = (i: number) => setMeds((p) => p.filter((_, idx) => idx !== i));
+  const addMed = () => setMeds((p) => [...p, { name: "", dose: "", category: "" }]);
+
+  const updMet = (i: number, k: keyof MetricEntry, v: string) =>
+    setMetrics((p) => p.map((m, idx) => (idx === i ? { ...m, [k]: v } : m)));
+  const delMet = (i: number) => setMetrics((p) => p.filter((_, idx) => idx !== i));
+  const addMet = () =>
+    setMetrics((p) => [...p, { type: "custom", label: "", value: "", unit: "", measuredAt: Date.now() }]);
+
   const count = isMeds ? meds.length : metrics.length;
+
+  // ── save ──
+  const save = async () => {
+    if (!user?.uid) { Alert.alert("Lỗi", "Bạn cần đăng nhập."); return; }
+    setSaving(true);
+    try {
+      if (isMeds) {
+        const valid = meds.filter((m) => (m.name || "").trim());
+        if (valid.length === 0) { Alert.alert("Trống", "Chưa có thuốc nào để lưu."); setSaving(false); return; }
+        const id = await createPrescription(user.uid);
+        try { await addImageToPrescription(id, user.uid, uri); } catch { /* ảnh lỗi không chặn lưu */ }
+        const note = valid
+          .map((m) => `• ${m.name}${m.dose ? ` — ${m.dose}` : ""}${m.category ? ` (${m.category})` : ""}`)
+          .join("\n");
+        await updatePrescriptionNote(id, note);
+        router.replace({ pathname: "/(patient)/ocr/confirm", params: { kind, count: String(valid.length) } });
+      } else {
+        const valid = metrics.filter((m) => (m.label || "").trim());
+        if (valid.length === 0) { Alert.alert("Trống", "Chưa có chỉ số nào để lưu."); setSaving(false); return; }
+        for (const m of valid) {
+          await addMetric(user.uid, (m.type as MetricType) || "custom", m.label!.trim(),
+            String(m.value ?? "").trim(), (m.unit || "").trim() || undefined, m.measuredAt);
+        }
+        router.replace({ pathname: "/(patient)/ocr/confirm", params: { kind, count: String(valid.length) } });
+      }
+    } catch (e) {
+      Alert.alert("Lỗi", "Không lưu được: " + (e as Error).message);
+      setSaving(false);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-paper">
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <AppBar
-          title={isMeds ? "Kiểm tra đơn thuốc" : "Kết quả phiếu XN"}
-          subtitle="Bước 2/3 · Review"
-          back
-        />
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+        <AppBar title={isMeds ? "Kiểm tra đơn thuốc" : "Kết quả phiếu XN"} subtitle="Bước 2/3 · Sửa & lưu" back />
 
         <View className="flex-row gap-3">
           <Image
@@ -46,7 +89,7 @@ export default function OcrReview() {
             style={{ width: 80, height: 100, borderRadius: 8, borderWidth: 1, borderColor: "#c8c8c2" }}
             resizeMode="cover"
           />
-          <View className="flex-1 gap-1">
+          <View className="flex-1 gap-1 justify-center">
             {loading ? (
               <View className="flex-row items-center gap-2">
                 <ActivityIndicator size="small" />
@@ -55,65 +98,55 @@ export default function OcrReview() {
             ) : (
               <>
                 <Chip variant="accent">✓ {count} mục đọc được</Chip>
-                <Text className="text-[11px] text-ink-3 mt-1">
-                  Độ tin cậy ~92%. Xem lại trước khi lưu.
-                </Text>
+                <Text className="text-[11px] text-ink-3 mt-1">Sửa lại nếu sai rồi bấm Lưu.</Text>
               </>
             )}
           </View>
         </View>
 
         {!loading && isMeds && (
-          <View className="gap-1.5">
+          <View className="gap-2">
             {meds.map((m, i) => (
               <Card key={i} padding="md">
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-1">
-                    <Text className="text-xs font-bold text-ink">{m.name}</Text>
-                    <Text className="text-[11px] text-ink-3">{m.dose}</Text>
+                <View className="gap-1.5">
+                  <View className="flex-row items-center gap-2">
+                    <TextInput className={`${inputCls} flex-1 font-bold`} placeholder="Tên thuốc + hàm lượng"
+                      value={m.name ?? ""} onChangeText={(v) => updMed(i, "name", v)} />
+                    <Pressable onPress={() => delMed(i)} hitSlop={8}><Text className="text-danger text-lg">✕</Text></Pressable>
                   </View>
-                  {m.category && <Chip variant="soft">{m.category}</Chip>}
+                  <TextInput className={inputCls} placeholder="Cách dùng / liều"
+                    value={m.dose ?? ""} onChangeText={(v) => updMed(i, "dose", v)} />
+                  <TextInput className={inputCls} placeholder="Nhóm (Huyết áp, Xương khớp…)"
+                    value={m.category ?? ""} onChangeText={(v) => updMed(i, "category", v)} />
                 </View>
               </Card>
             ))}
+            <Button size="sm" onPress={addMed}>＋ Thêm thuốc</Button>
           </View>
         )}
 
         {!loading && !isMeds && (
-          <Card padding="none">
-            <View className="flex-row px-3 py-2 bg-paper-2 border-b border-line-soft">
-              <Text className="flex-[2] text-[10px] font-bold uppercase tracking-wider text-ink-3">
-                Chỉ số
-              </Text>
-              <Text className="flex-1 text-[10px] font-bold text-right uppercase text-ink-3">
-                Giá trị
-              </Text>
-            </View>
+          <View className="gap-2">
             {metrics.map((m, i) => (
-              <View
-                key={i}
-                className="flex-row items-center px-3 py-2 border-t border-dashed border-line-soft"
-              >
-                <Text className="flex-[2] text-xs text-ink">{m.label}</Text>
-                <Text className="flex-1 text-xs font-mono text-right text-ink">
-                  {m.value} {m.unit}
-                </Text>
-              </View>
+              <Card key={i} padding="md">
+                <View className="flex-row items-center gap-2">
+                  <TextInput className={`${inputCls} flex-[2]`} placeholder="Chỉ số"
+                    value={m.label ?? ""} onChangeText={(v) => updMet(i, "label", v)} />
+                  <TextInput className={`${inputCls} flex-1 text-right`} placeholder="Giá trị"
+                    value={String(m.value ?? "")} onChangeText={(v) => updMet(i, "value", v)} />
+                  <TextInput className={`${inputCls} w-14`} placeholder="ĐV"
+                    value={m.unit ?? ""} onChangeText={(v) => updMet(i, "unit", v)} />
+                  <Pressable onPress={() => delMet(i)} hitSlop={8}><Text className="text-danger text-lg">✕</Text></Pressable>
+                </View>
+              </Card>
             ))}
-          </Card>
+            <Button size="sm" onPress={addMet}>＋ Thêm chỉ số</Button>
+          </View>
         )}
 
-        <View className="flex-row gap-2">
-          <Button block onPress={() => router.back()}>＋ Sửa</Button>
-          <Button
-            variant="primary"
-            block
-            disabled={loading}
-            onPress={() => router.replace({ pathname: "/(patient)/ocr/confirm", params: { kind } })}
-          >
-            Xác nhận →
-          </Button>
-        </View>
+        <Button variant="primary" block loading={saving} disabled={loading} onPress={save}>
+          💾 Lưu vào hồ sơ
+        </Button>
       </ScrollView>
     </SafeAreaView>
   );

@@ -7,8 +7,9 @@ import { Avatar } from "@/components/ui/Avatar";
 
 export default function OcrConfirm() {
   const router = useRouter();
-  const { kind } = useLocalSearchParams<{ kind: string }>();
+  const { kind, count } = useLocalSearchParams<{ kind: string; count?: string }>();
   const isMeds = kind !== "metrics";
+  const n = Number(count) || 0;
 
   return (
     <SafeAreaView className="flex-1 bg-paper">
@@ -26,16 +27,9 @@ export default function OcrConfirm() {
         <Card variant="soft" padding="md" style={{ width: "100%" }}>
           <Text className="text-[10px] uppercase tracking-wider text-ink-3 mb-1">TÓM TẮT</Text>
           {isMeds ? (
-            <>
-              <Text className="text-xs text-ink">+ 1 thuốc mới (Aspirin 81mg)</Text>
-              <Text className="text-xs text-ink">~ 1 thuốc đổi liều (Metformin)</Text>
-              <Text className="text-xs text-ink">– 0 ngừng</Text>
-            </>
+            <Text className="text-xs text-ink">Đã lưu {n} thuốc vào đơn thuốc mới.</Text>
           ) : (
-            <>
-              <Text className="text-xs text-ink">8 chỉ số xét nghiệm đã thêm.</Text>
-              <Text className="text-xs text-ink">1 chỉ số cần theo dõi (HbA1c 6.4)</Text>
-            </>
+            <Text className="text-xs text-ink">Đã thêm {n} chỉ số xét nghiệm vào hồ sơ.</Text>
           )}
         </Card>
 

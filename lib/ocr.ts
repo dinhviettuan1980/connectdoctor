@@ -58,7 +58,7 @@ export async function extractMetricsFromImage(imageUri: string): Promise<Partial
       .map((m: any) => ({
         type: TYPE_MAP[m.type] || "custom",
         label: m.label,
-        value: [m.value, m.unit].filter(Boolean).join(" "),
+        value: String(m.value ?? ""),
         unit: m.unit || undefined,
         measuredAt: now,
       }));
