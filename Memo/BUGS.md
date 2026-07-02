@@ -59,6 +59,28 @@
 - **Bài học:** tính năng background location mới trên iOS luôn cần cập nhật `Info.plist`
   (`app.json` → `ios.infoPlist`), không tự động có.
 
+### Auto-OCR "nhận diện thất bại" — thực ra là Firestore từ chối field `undefined`
+- **Ngày phát hiện & sửa:** 2026-07-02, ngay sau khi thêm tính năng auto-OCR (commit `e421563`).
+- **Triệu chứng:** banner báo "Nhận diện thuốc từ ảnh thất bại (Function updateDoc() called with invalid
+  data. Unsupported field value: undefined (found in document prescriptions/...))" dù ảnh đơn thuốc rõ
+  nét (đã kiểm tra 2 ảnh mẫu, chất lượng tốt).
+- **Nguyên nhân thật:** OCR **đã chạy thành công** và nhận diện được thuốc — lỗi xảy ra ở bước ghi
+  Firestore ngay sau đó. Khi thuốc không có `category` (thường xảy ra vì server OCR trả `category: ""`),
+  code build `{ category: m.category?.trim() || undefined }` → field `category` có giá trị `undefined`.
+  Firestore `updateDoc()`/`addDoc()` **luôn throw** nếu bất kỳ field nào trong dữ liệu ghi là `undefined`
+  (kể cả lồng trong mảng) — không có `ignoreUndefinedProperties` bật trong `lib/firebase.ts`. Chỉ nhờ fix
+  trước đó (`lib/ocr.ts` thêm `onError` callback, commit `5057c0a`) mới lộ ra được thông báo lỗi thật này
+  thay vì thông báo mơ hồ "nhận diện thất bại" chung chung.
+- **Phạm vi:** cùng pattern `category: X || undefined` cũng có ở `MedsEditor` (lưu thủ công,
+  `profile.tsx`) và ở `ocr/review.tsx` (luồng OCR tạo đơn mới) — nghĩa là lưu thuốc không có nhóm ở CẢ 3
+  luồng đều có thể dính lỗi này, không chỉ auto-OCR.
+- **Fix:** thêm `sanitizeMeds()` trong `lib/prescriptions.ts`, bỏ hẳn key `category` thay vì giữ
+  `undefined`, áp dụng ngay trong `createPrescription`/`updatePrescriptionMeds` (data layer) — fix 1 chỗ
+  áp dụng cho cả 3 luồng gọi, thay vì sửa từng UI call site (commit `8363d76`).
+- **Bài học:** khi debug "OCR thất bại", đừng mặc định là lỗi OCR — banner lúc đầu (trước commit
+  `5057c0a`) che mất nguyên nhân thật. Luôn ưu tiên hiện message lỗi thật thay vì generic message khi có
+  thể.
+
 ### Upload ảnh đơn thuốc bị 413 Request Entity Too Large (production)
 - **Ngày phát hiện & sửa:** 2026-07-02.
 - **Triệu chứng:** trên `connectdoctor.tuandv.id.vn/profile`, chọn ảnh đơn thuốc (~3MB) để upload báo lỗi,

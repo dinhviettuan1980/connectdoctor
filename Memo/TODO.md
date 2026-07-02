@@ -65,6 +65,13 @@
   README chỉ cần đồng bộ lại cho người mới vào repo qua GitHub.
   Trạng thái: chưa bắt đầu.
 
+- **Audit các Firestore write khác xem có field `undefined` tương tự bug prescriptions không**
+  Mô tả: đã sửa `category: undefined` trong `lib/prescriptions.ts` (xem `BUGS.md` 2026-07-02) — nhưng
+  chưa kiểm tra các collection khác (`metrics`, `medicationSchedules`, `doctorProfiles`, ...) có field
+  optional nào bị set `undefined` trước khi `addDoc`/`updateDoc` không. `lib/firebase.ts` không bật
+  `ignoreUndefinedProperties`, nên bất kỳ chỗ nào cũng có thể dính lỗi tương tự.
+  Trạng thái: chưa bắt đầu.
+
 - **"Đổi tên nhóm gia đình" không có UI thật trên Android**
   Mô tả: `family-group/[id].tsx` dùng `Alert.prompt` để đổi tên nhóm — API này chỉ có trên iOS thật.
   Sau fix `lib/alert.ts` (2026-07-02, xem `BUGS.md`), Android không còn crash nhưng tính năng lặng lẽ

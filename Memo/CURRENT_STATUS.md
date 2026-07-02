@@ -5,7 +5,7 @@
 **Cập nhật lần cuối:** 2026-07-02
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
 (`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `7dd9523` — fix(alert): add cross-platform Alert shim, fix no-op-on-web everywhere
+**HEAD:** `8363d76` — fix(prescriptions): strip undefined category before writing to Firestore
 
 ## Đang làm gì
 
@@ -17,11 +17,11 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
    (tên/liều/nhóm) có cấu trúc; fallback hiển thị `note` cho đơn cũ.
 3. **Fix bug production: upload ảnh trả về URL nội bộ không dùng được** — commit `1e665bc` (nginx) +
    `e1b30be` (code). Root cause + fix chi tiết ở `BUGS.md`. **Đã user xác nhận ảnh hiện đúng sau fix.**
-4. **Auto-OCR khi thêm ảnh trong màn sửa đơn thuốc thủ công** — commit `e421563`, feedback UI sửa lại ở
-   commit `422a6b2` (banner inline thay vì `Alert.alert`, xem mục 5). Mỗi ảnh thêm vào trong
-   `Hồ sơ → Đơn thuốc → mở 1 đơn` giờ tự chạy `extractMedsFromImage` và gộp kết quả vào danh sách thuốc,
-   dùng lại `MedsEditor`/nút "Lưu danh sách thuốc" đã có sẵn. **Chưa được user xác nhận đã test trên UI
-   thật sau bản fix banner.**
+4. **Auto-OCR khi thêm ảnh trong màn sửa đơn thuốc thủ công** — commit `e421563` → `422a6b2` (banner
+   inline) → `5057c0a` (surface lỗi thật thay vì message chung chung) → `8363d76` (root cause thật: OCR
+   chạy thành công nhưng `updateDoc()` throw vì field `category: undefined` — Firestore từ chối
+   `undefined` ở bất kỳ đâu; fix bằng `sanitizeMeds()` trong `lib/prescriptions.ts`, áp dụng cho cả 3
+   luồng lưu thuốc). Chi tiết ở `BUGS.md`. **Chưa được user xác nhận đã test lại sau bản fix cuối.**
 5. **Fix bug hệ thống: `Alert.alert`/`Alert.prompt` không hoạt động trên web (và `prompt` crash trên
    Android)** — commit `7dd9523`. Thêm `lib/alert.ts`, đổi import ở 9 file. Root cause + phạm vi chi tiết
    ở `BUGS.md`. **Chưa được user xác nhận đã test trên UI thật** (đặc biệt các nút xoá — "Xoá đơn thuốc
