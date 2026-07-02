@@ -75,6 +75,26 @@
 - **Bài học:** đây là 1 trong nhiều site nginx trên VPS dùng chung — chưa audit các site khác
   (kinhdich, xsmbfrontend, ...) xem có cùng thiếu `client_max_body_size` không. Xem `TODO.md`.
 
+### `Alert.alert()` hoàn toàn không hoạt động trên web build — lỗi hệ thống, chưa fix hết
+- **Ngày phát hiện:** 2026-07-02, khi debug việc auto-OCR "chạy xong nhưng không thấy gì" trên web.
+- **Nguyên nhân:** `node_modules/react-native-web/dist/exports/Alert/index.js` chỉ export
+  `class Alert { static alert() {} }` — một no-op hoàn toàn, không fallback sang `window.alert`/`confirm`.
+  Toàn bộ `Alert.alert(...)` gọi trên web build **im lặng không làm gì**, kể cả khi có `buttons` với
+  `onPress` (nghĩa là **các hộp thoại xác nhận hành động, ví dụ nút "Xoá đơn thuốc này", không hiện gì
+  trên web và callback `onPress` không bao giờ chạy** — hành động bị coi như không làm gì, không phải lỗi
+  ẩn).
+- **Phạm vi:** grep thấy 42 lời gọi `Alert.alert(` trải trên 9 file: `profile.tsx` (15),
+  `EmergencyContacts.tsx` (7), `family-group/[id].tsx` (5), `ocr/review.tsx` (4), `sign-up.tsx` (3),
+  `ocr/upload.tsx`, `tasks.tsx`, `FamilyGroups.tsx`, `NewChatSheet.tsx` (2 mỗi file).
+- **Đã fix cục bộ:** `app/(patient)/profile.tsx` → luồng auto-OCR khi thêm ảnh đơn thuốc, dùng banner
+  inline (state `ocrMsg`) thay vì phụ thuộc `Alert.alert` (commit `422a6b2`).
+- **Chưa fix:** 41 lời gọi còn lại, bao gồm các xác nhận xoá (destructive) — trên web, bấm nút xoá sẽ
+  **không hỏi xác nhận và không xoá được gì** (không phải "xoá không hỏi" — mà là "không làm gì cả"), vì
+  callback nằm trong `buttons[].onPress` của `Alert.alert` không bao giờ được gọi.
+- **Fix triệt để đề xuất:** viết 1 helper cross-platform (vd. `lib/alert.ts`) — trên web dùng
+  `window.confirm`/`window.alert`, trên native dùng `Alert.alert` — rồi thay thế tất cả 42 chỗ. Đây là
+  việc lớn, chạm 9 file, **chưa làm** — xem `TODO.md`.
+
 ## Workaround đang áp dụng (chưa phải fix triệt để)
 
 - **`EXPO_PUBLIC_*` lộ API key phía client** — chấp nhận được cho dev, chưa fix triệt để (xem `TODO.md`

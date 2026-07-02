@@ -4,6 +4,16 @@
 
 ## High Priority
 
+- **Thay `Alert.alert()` bằng helper cross-platform trên toàn app (web hiện không hoạt động)**
+  Mô tả: `Alert.alert()` là no-op hoàn toàn trên web build (xem `BUGS.md` 2026-07-02) — mọi thông báo lỗi
+  VÀ mọi hộp thoại xác nhận hành động (destructive, ví dụ nút "Xoá đơn thuốc này") đều không hiện gì và
+  không chạy `onPress` trên web. Ảnh hưởng 42 lời gọi / 9 file (`profile.tsx`, `EmergencyContacts.tsx`,
+  `family-group/[id].tsx`, `ocr/review.tsx`, `ocr/upload.tsx`, `sign-up.tsx`, `tasks.tsx`,
+  `FamilyGroups.tsx`, `NewChatSheet.tsx`). Cần viết 1 helper cross-platform (web: `window.confirm`/
+  `window.alert`; native: `Alert.alert`) rồi thay hết các chỗ gọi trực tiếp.
+  Trạng thái: đã fix cục bộ 1 chỗ (`profile.tsx` — luồng auto-OCR, commit `422a6b2`), 41 chỗ còn lại
+  **chưa fix**. Ưu tiên cao vì ảnh hưởng cả các thao tác xoá dữ liệu trên web.
+
 - **Giấu API key Gemini sau Cloud Functions**
   Mô tả: `EXPO_PUBLIC_GEMINI_API_KEY` (dùng trong `lib/ai.ts` cho AI triage, key gắn thẳng vào query
   string `?key=...`) bị lộ ra client vì convention `EXPO_PUBLIC_*` của Expo. Cần chuyển lời gọi Gemini
