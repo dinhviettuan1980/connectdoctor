@@ -39,6 +39,7 @@ import {
 } from "@/lib/medicationSchedules";
 import { requestNotificationPermission } from "@/lib/notifications";
 import { scanForHealthDevices, type HealthDevice } from "@/lib/ble";
+import { extractMedsFromImage } from "@/lib/ocr";
 import type { EmergencyContact, Medication, MetricEntry, MetricType, PatientProfile } from "@/lib/types";
 import { EmergencyContacts } from "@/components/EmergencyContacts";
 import { FamilyGroups } from "@/components/FamilyGroups";
@@ -662,6 +663,7 @@ function MedsTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [recognizing, setRecognizing] = useState(false);
   const [viewImage, setViewImage] = useState<string | null>(null);
 
   // 3 columns inside detail modal (modal width ≈ screen width, same padding)
@@ -726,13 +728,41 @@ function MedsTab() {
       result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
     }
     if (result.canceled || !result.assets?.[0]) return;
+    const uri = result.assets[0].uri;
     setUploading(true);
     try {
-      await addImageToPrescription(selectedId, user.uid, result.assets[0].uri);
+      await addImageToPrescription(selectedId, user.uid, uri);
     } catch {
       Alert.alert("Lỗi", "Upload ảnh thất bại.");
-    } finally {
       setUploading(false);
+      return;
+    }
+    setUploading(false);
+
+    // Tự động nhận diện thuốc từ ảnh vừa thêm bằng AI, gộp vào danh sách thuốc hiện có
+    // để người dùng chỉ cần sửa nếu sai rồi bấm "Lưu danh sách thuốc" (không chặn nếu OCR lỗi).
+    setRecognizing(true);
+    try {
+      const detected = await extractMedsFromImage(uri);
+      if (detected.length > 0) {
+        const now = Date.now();
+        const newMeds: Medication[] = detected.map((m, i) => ({
+          id: makeMedId(i),
+          name: (m.name ?? "").trim(),
+          dose: (m.dose ?? "").trim(),
+          category: m.category?.trim() || undefined,
+          source: "ocr",
+          createdAt: now,
+        }));
+        const current = prescriptions.find((p) => p.id === selectedId)?.meds ?? [];
+        await updatePrescriptionMeds(selectedId, [...current, ...newMeds]);
+      } else {
+        Alert.alert("AI", "Không nhận diện được tên thuốc nào trong ảnh này. Bạn có thể nhập tay ở mục Thuốc.");
+      }
+    } catch {
+      Alert.alert("AI", "Nhận diện thuốc từ ảnh thất bại. Bạn có thể nhập tay ở mục Thuốc.");
+    } finally {
+      setRecognizing(false);
     }
   };
 
@@ -835,9 +865,9 @@ function MedsTab() {
                 </Pressable>
               </View>
 
-              {/* Meds editor (cấu trúc từng thuốc) */}
+              {/* Meds editor (cấu trúc từng thuốc) — remount khi updatedAt đổi để hiện thuốc AI vừa nhận diện */}
               <MedsEditor
-                key={`meds-${selected?.id}`}
+                key={`meds-${selected?.id}-${selected?.updatedAt}`}
                 initialMeds={selected?.meds ?? []}
                 onSave={(meds) => selected && updatePrescriptionMeds(selected.id, meds)}
               />
@@ -858,6 +888,13 @@ function MedsTab() {
                 <View className="flex-row items-center gap-2">
                   <ActivityIndicator size="small" />
                   <Text className="text-xs text-ink-3">Đang upload…</Text>
+                </View>
+              )}
+
+              {recognizing && (
+                <View className="flex-row items-center gap-2">
+                  <ActivityIndicator size="small" />
+                  <Text className="text-xs text-ink-3">🤖 Đang nhận diện thuốc từ ảnh…</Text>
                 </View>
               )}
 
@@ -890,12 +927,12 @@ function MedsTab() {
               {/* Add photo buttons */}
               <View className="flex-row gap-2">
                 <View className="flex-1">
-                  <Button block onPress={() => handleAddImage(false)} disabled={uploading}>
+                  <Button block onPress={() => handleAddImage(false)} disabled={uploading || recognizing}>
                     📁 Chọn file
                   </Button>
                 </View>
                 <View className="flex-1">
-                  <Button variant="primary" block onPress={() => handleAddImage(true)} disabled={uploading}>
+                  <Button variant="primary" block onPress={() => handleAddImage(true)} disabled={uploading || recognizing}>
                     📷 Chụp ảnh
                   </Button>
                 </View>
