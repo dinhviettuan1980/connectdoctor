@@ -664,6 +664,7 @@ function MedsTab() {
   const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recognizing, setRecognizing] = useState(false);
+  const [ocrMsg, setOcrMsg] = useState<string | null>(null);
   const [viewImage, setViewImage] = useState<string | null>(null);
 
   // 3 columns inside detail modal (modal width ≈ screen width, same padding)
@@ -683,6 +684,7 @@ function MedsTab() {
     setCreating(true);
     try {
       const id = await createPrescription(user.uid);
+      setOcrMsg(null);
       setSelectedId(id); // open detail immediately
     } catch {
       Alert.alert("Lỗi", "Không thể tạo đơn thuốc.");
@@ -729,11 +731,15 @@ function MedsTab() {
     }
     if (result.canceled || !result.assets?.[0]) return;
     const uri = result.assets[0].uri;
+    setOcrMsg(null);
     setUploading(true);
     try {
       await addImageToPrescription(selectedId, user.uid, uri);
     } catch {
+      // Alert.alert là no-op trên web (react-native-web chưa cài đặt) — luôn hiện thêm banner
+      // inline để chắc chắn người dùng thấy lỗi trên mọi nền tảng.
       Alert.alert("Lỗi", "Upload ảnh thất bại.");
+      setOcrMsg("⚠️ Upload ảnh thất bại. Thử lại.");
       setUploading(false);
       return;
     }
@@ -756,11 +762,12 @@ function MedsTab() {
         }));
         const current = prescriptions.find((p) => p.id === selectedId)?.meds ?? [];
         await updatePrescriptionMeds(selectedId, [...current, ...newMeds]);
+        setOcrMsg(`✅ Đã nhận diện ${newMeds.length} thuốc từ ảnh — kiểm tra ở mục Thuốc bên trên rồi bấm "Lưu danh sách thuốc".`);
       } else {
-        Alert.alert("AI", "Không nhận diện được tên thuốc nào trong ảnh này. Bạn có thể nhập tay ở mục Thuốc.");
+        setOcrMsg("🤖 Không nhận diện được thuốc nào trong ảnh này. Bạn có thể nhập tay ở mục Thuốc.");
       }
     } catch {
-      Alert.alert("AI", "Nhận diện thuốc từ ảnh thất bại. Bạn có thể nhập tay ở mục Thuốc.");
+      setOcrMsg("⚠️ Nhận diện thuốc từ ảnh thất bại. Bạn có thể nhập tay ở mục Thuốc.");
     } finally {
       setRecognizing(false);
     }
@@ -795,7 +802,7 @@ function MedsTab() {
               {formatDateTime(p.createdAt)}
             </Text>
             <View className="flex-row gap-3">
-              <Pressable onPress={() => setSelectedId(p.id)}>
+              <Pressable onPress={() => { setOcrMsg(null); setSelectedId(p.id); }}>
                 <Text className="text-xs text-accent-ink">Mở</Text>
               </Pressable>
               <Pressable onPress={() => handleDeletePrescription(p)}>
@@ -847,7 +854,7 @@ function MedsTab() {
       <Modal
         visible={!!selected}
         animationType="slide"
-        onRequestClose={() => setSelectedId(null)}
+        onRequestClose={() => { setOcrMsg(null); setSelectedId(null); }}
       >
         <SafeAreaView className="flex-1 bg-paper">
           <KeyboardAvoidingView
@@ -860,7 +867,7 @@ function MedsTab() {
                 <Text className="font-mono text-xs font-bold text-ink">
                   {selected ? formatDateTime(selected.createdAt) : ""}
                 </Text>
-                <Pressable onPress={() => setSelectedId(null)} className="p-1">
+                <Pressable onPress={() => { setOcrMsg(null); setSelectedId(null); }} className="p-1">
                   <Text className="text-base text-ink-2">✕ Đóng</Text>
                 </Pressable>
               </View>
@@ -895,6 +902,12 @@ function MedsTab() {
                 <View className="flex-row items-center gap-2">
                   <ActivityIndicator size="small" />
                   <Text className="text-xs text-ink-3">🤖 Đang nhận diện thuốc từ ảnh…</Text>
+                </View>
+              )}
+
+              {!!ocrMsg && !recognizing && (
+                <View className="bg-accent-soft rounded-lg px-3 py-2">
+                  <Text className="text-xs text-accent-ink">{ocrMsg}</Text>
                 </View>
               )}
 
