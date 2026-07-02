@@ -5,7 +5,7 @@
 **Cập nhật lần cuối:** 2026-07-02
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
 (`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `1069222` — feat(reminders): remove manual add button, schedules now auto-generate
+**HEAD:** `780090a` — feat(reminders): include medication names in the reminder notification/card
 
 ## Đang làm gì
 
@@ -80,7 +80,16 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
 13. **Bỏ nút "+ Thêm giờ uống thuốc" thủ công** — commit `1069222`, theo yêu cầu user vì lịch nhắc giờ tự
     sinh từ đơn thuốc (mục 12). Tab "Nhắc nhở" giờ chỉ còn Sửa (giờ/phút/bật-tắt) và Xoá cho lịch đã có,
     không tạo mới thủ công được nữa.
-    **Cả 3 mục 12/13 chưa được user xác nhận đã test trên UI thật.**
+14. **Nội dung nhắc nhở giờ liệt kê đúng tên thuốc, không chỉ nói buổi** — commit `780090a`. User phản hồi
+    thông báo trước đó chỉ nói "Sáng"/"Chiều"/"Tối" mà không nói uống thuốc gì. Thêm field `meds?:
+    string[]` vào `MedicationSchedule`, `scheduleMedicationReminder` (`lib/notifications.native.ts`) build
+    nội dung push notification kiểu `"Sáng: Paracetamol, Vitamin D — còn 5 phút nữa..."`. Cũng hiện danh
+    sách thuốc trực tiếp trên card ở tab "Nhắc nhở" (💊 ...).
+    **Lưu ý:** push notification thật (`expo-notifications`) chỉ chạy trên **native** (iOS/Android) —
+    `lib/notifications.ts` (bản web) vẫn là no-op stub như từ trước. Trên web chỉ thấy danh sách thuốc
+    qua card trong tab Nhắc nhở, không có push notification thật.
+    **Cả mục 12/13/14 chưa được user xác nhận đã test trên UI thật** (đặc biệt mục 14 cần test trên máy
+    thật/simulator native mới thấy nội dung push, không test được qua web).
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 
