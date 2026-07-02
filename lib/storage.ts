@@ -1,4 +1,4 @@
-export const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
+export const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://doctorapi.tuandv.id.vn/storage";
 
 /**
  * The storage server sometimes returns its internal address (e.g. http://localhost:8001/...)

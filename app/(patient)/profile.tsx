@@ -41,7 +41,7 @@ import {
 import { requestNotificationPermission } from "@/lib/notifications";
 import { scanForHealthDevices, type HealthDevice } from "@/lib/ble";
 import { extractMedsFromImage } from "@/lib/ocr";
-import { notify } from "@/lib/notify";
+import { notify, classifyMedTimes } from "@/lib/notify";
 import type { EmergencyContact, Medication, MetricEntry, MetricType, PatientProfile } from "@/lib/types";
 import { EmergencyContacts } from "@/components/EmergencyContacts";
 import { FamilyGroups } from "@/components/FamilyGroups";
@@ -683,7 +683,14 @@ function detectMealTimes(doseText: string): (typeof REMINDER_KEYWORDS)[number][]
   return ["Sáng"]; // fallback khi không đoán được gì
 }
 
-/** Gộp danh sách thuốc thành thông báo dạng "Sáng: ... / Chiều: ... / Tối: ..." để gửi test qua Telegram. */
+function formatSchedule(byTime: Record<(typeof REMINDER_KEYWORDS)[number], string[]>): string {
+  const lines = REMINDER_KEYWORDS
+    .filter((t) => byTime[t].length > 0)
+    .map((t) => `${t}:\n` + byTime[t].map((s) => `  • ${s}`).join("\n"));
+  return lines.length > 0 ? lines.join("\n\n") : "(Không phân tích được giờ uống từ đơn thuốc này)";
+}
+
+/** Fallback cục bộ (keyword-matching) khi gọi AI phân loại (classifyMedTimes) lỗi. */
 function buildReminderPlanMessage(meds: Medication[]): string {
   const byTime: Record<(typeof REMINDER_KEYWORDS)[number], string[]> = { "Sáng": [], "Chiều": [], "Tối": [] };
   for (const m of meds) {
@@ -692,10 +699,7 @@ function buildReminderPlanMessage(meds: Medication[]): string {
       byTime[t].push(m.dose ? `${m.name} (${m.dose})` : m.name);
     }
   }
-  const lines = REMINDER_KEYWORDS
-    .filter((t) => byTime[t].length > 0)
-    .map((t) => `${t}:\n` + byTime[t].map((s) => `  • ${s}`).join("\n"));
-  return lines.length > 0 ? lines.join("\n\n") : "(Không phân tích được giờ uống từ đơn thuốc này)";
+  return formatSchedule(byTime);
 }
 
 function MedsTab() {
@@ -838,13 +842,17 @@ function MedsTab() {
 
       // Chỉ phân tích lịch nhắc cho đơn thuốc MỚI NHẤT — đơn cũ bỏ qua.
       // Tạm thời chỉ gửi kết quả phân tích qua Telegram để test, chưa tự tạo lịch nhắc thật.
+      // Không await AI — chạy nền, không chặn thao tác Lưu, fallback về keyword-matching nếu lỗi.
       const isNewest = prescriptions.every((p) => p.id === selectedId || p.createdAt <= (selected?.createdAt ?? 0));
       if (isNewest && finalMeds.length > 0) {
-        const plan = buildReminderPlanMessage(finalMeds);
-        notify(
-          "💊 Lịch nhắc thuốc (test)",
-          `Đơn ngày ${selected ? formatDateTime(selected.createdAt) : ""}\n\n${plan}`,
-        ).catch(() => {});
+        const rxDate = selected ? formatDateTime(selected.createdAt) : "";
+        classifyMedTimes(finalMeds.map((m) => ({ name: m.name, dose: m.dose }))).then((aiSchedule) => {
+          const plan = aiSchedule
+            ? formatSchedule({ "Sáng": aiSchedule["Sáng"] ?? [], "Chiều": aiSchedule["Chiều"] ?? [], "Tối": aiSchedule["Tối"] ?? [] })
+            : buildReminderPlanMessage(finalMeds);
+          const title = aiSchedule ? "💊 Lịch nhắc thuốc (test, AI 🤖)" : "💊 Lịch nhắc thuốc (test)";
+          notify(title, `Đơn ngày ${rxDate}\n\n${plan}`).catch(() => {});
+        });
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
