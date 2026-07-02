@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import {
   markThreadRead,
 } from "@/lib/chat";
 import { formatTime } from "@/lib/time";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { ChatMessage } from "@/lib/types";
 import VideoCallModal from "@/components/VideoCallModal";
 
@@ -66,6 +67,10 @@ export default function DoctorChatThread() {
 
   const [playingId, setPlayingId] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
+
+  const patientUids = useMemo(() => (patientId ? [patientId] : []), [patientId]);
+  const onlineStatus = useOnlineStatus(patientUids);
+  const isPatientOnline = patientId ? onlineStatus[patientId] : false;
 
   useEffect(() => {
     if (!user || !patientId) return;
@@ -180,12 +185,19 @@ export default function DoctorChatThread() {
           >
             <Text className="text-xl text-ink-2">‹</Text>
           </Pressable>
-          <Avatar label={patientName} />
+          <View className="relative">
+            <Avatar label={patientName} />
+            {isPatientOnline && (
+              <View className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-accent rounded-full border-2 border-paper" />
+            )}
+          </View>
           <View className="flex-1">
             <Text className="text-xs font-bold text-ink" numberOfLines={1}>
               {patientName}
             </Text>
-            <Text className="text-[11px] text-ink-3">Bệnh nhân</Text>
+            <Text className="text-[11px] text-ink-3">
+              {isPatientOnline ? "● Đang online" : "Bệnh nhân"}
+            </Text>
           </View>
         </View>
         <Divider />

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import {
   markThreadRead,
 } from "@/lib/chat";
 import { formatTime } from "@/lib/time";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { ChatMessage } from "@/lib/types";
 
 const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
@@ -68,6 +69,10 @@ export default function ChatThread() {
 
   const [playingId, setPlayingId] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
+
+  const doctorUids = useMemo(() => (doctorId ? [doctorId] : []), [doctorId]);
+  const onlineStatus = useOnlineStatus(doctorUids);
+  const isDoctorOnline = doctorId ? onlineStatus[doctorId] : false;
 
   useEffect(() => {
     if (!user || !doctorId) return;
@@ -199,7 +204,9 @@ export default function ChatThread() {
                 <Text className="text-xs font-bold text-ink" numberOfLines={1}>
                   {d.fullName}
                 </Text>
-                <Text className="text-[11px] text-ink-3">● online · {d.specialty}</Text>
+                <Text className="text-[11px] text-ink-3">
+                  {isDoctorOnline ? "● Đang online" : d.specialty}
+                </Text>
               </View>
             </Pressable>
           </View>

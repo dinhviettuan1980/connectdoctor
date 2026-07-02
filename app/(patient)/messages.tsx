@@ -12,6 +12,7 @@ import { subscribeToThreads, type ThreadWithNames } from "@/lib/chat";
 import { subscribeToUserFamilyChats, type FamilyThread } from "@/lib/familyChat";
 import { subscribeToUserGroups } from "@/lib/familyGroups";
 import { formatRelativeTime } from "@/lib/time";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { FamilyGroup } from "@/lib/types";
 
 type Row =
@@ -41,6 +42,9 @@ export default function Messages() {
     if (!user) return;
     return subscribeToUserGroups(user.uid, setGroups);
   }, [user?.uid]);
+
+  const doctorUids = useMemo(() => doctorThreads.map((t) => t.doctorUid), [doctorThreads]);
+  const onlineStatus = useOnlineStatus(doctorUids);
 
   const rows = useMemo<Row[]>(() => {
     const all: Row[] = [];
@@ -109,6 +113,8 @@ export default function Messages() {
           {rows.map((r) => {
             const unread = "unread" in r ? r.unread : 0;
             const isGroup = r.kind === "group";
+            const doctorUid = r.kind === "doctor" ? doctorThreads.find((t) => t.id === r.id)?.doctorUid : undefined;
+            const online = doctorUid ? onlineStatus[doctorUid] : false;
             return (
               <Pressable key={`${r.kind}-${r.id}`} onPress={r.onPress}>
                 <Card padding="md" variant={unread > 0 ? "soft" : "default"}>
@@ -118,7 +124,12 @@ export default function Messages() {
                         <Text style={{ fontSize: 18 }}>👨‍👩‍👧</Text>
                       </View>
                     ) : (
-                      <Avatar label={r.name} />
+                      <View className="relative">
+                        <Avatar label={r.name} />
+                        {online && (
+                          <View className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-accent rounded-full border-2 border-paper" />
+                        )}
+                      </View>
                     )}
                     <View className="flex-1">
                       <View className="flex-row justify-between items-center">
