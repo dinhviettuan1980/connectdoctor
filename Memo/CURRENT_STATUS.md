@@ -5,7 +5,7 @@
 **Cập nhật lần cuối:** 2026-07-02
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
 (`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `8363d76` — fix(prescriptions): strip undefined category before writing to Firestore
+**HEAD:** `d1daf4b` — feat(prescriptions): stage photo + OCR meds, save both together on explicit Save
 
 ## Đang làm gì
 
@@ -26,6 +26,14 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
    Android)** — commit `7dd9523`. Thêm `lib/alert.ts`, đổi import ở 9 file. Root cause + phạm vi chi tiết
    ở `BUGS.md`. **Chưa được user xác nhận đã test trên UI thật** (đặc biệt các nút xoá — "Xoá đơn thuốc
    này", "Xoá liên hệ", "Giải tán nhóm", v.v. — trước đây không hoạt động gì trên web).
+6. **Redesign: thêm ảnh đơn thuốc giờ "staged" cục bộ, chỉ ghi Firestore khi bấm "Lưu"** — commit
+   `d1daf4b`. User phản hồi: trước đó không thấy nút Save vì ảnh + thuốc AI đã tự ghi Firestore ngay,
+   không còn gì "dirty" để hiện nút lưu. Giờ: chọn/chụp ảnh → chỉ giữ URI cục bộ + chạy OCR gộp vào bản
+   nháp `editableMeds` (state trong `MedsTab`, KHÔNG ghi Firestore) → nút "💾 Lưu" xuất hiện khi có ảnh
+   đang chờ hoặc danh sách thuốc khác với bản đã lưu → bấm mới upload ảnh + `updatePrescriptionMeds` cùng
+   lúc. `MedsEditor` đổi thành controlled component (`meds`+`onChange`, không còn state/nút lưu riêng bên
+   trong). Đóng modal khi có thay đổi chưa lưu giờ hỏi xác nhận trước khi mất dữ liệu. **Chưa được user
+   xác nhận đã test trên UI thật.**
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 
