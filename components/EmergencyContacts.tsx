@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  View, Text, Pressable, Modal, TextInput, FlatList, Alert, Linking,
+  View, Text, Pressable, Modal, TextInput, FlatList, Linking,
   ActivityIndicator, KeyboardAvoidingView, Platform,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Contacts from "expo-contacts";
 import { useRouter } from "expo-router";

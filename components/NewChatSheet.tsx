@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   View, Text, Pressable, Modal, TextInput, FlatList, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Alert,
+  KeyboardAvoidingView, Platform,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Avatar } from "@/components/ui/Avatar";

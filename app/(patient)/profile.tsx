@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, Pressable, TextInput, FlatList, Linking,
-  Modal, Image, ActivityIndicator, Alert, useWindowDimensions,
+  Modal, Image, ActivityIndicator, useWindowDimensions,
   KeyboardAvoidingView, Platform,
 } from "react-native";
+import { Alert } from "@/lib/alert";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { AppBar } from "@/components/AppBar";

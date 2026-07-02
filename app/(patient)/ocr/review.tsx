@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { View, Text, ScrollView, Image, ActivityIndicator, TextInput, Pressable, Alert } from "react-native";
+import { View, Text, ScrollView, Image, ActivityIndicator, TextInput, Pressable } from "react-native";
+import { Alert } from "@/lib/alert";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AppBar } from "@/components/AppBar";

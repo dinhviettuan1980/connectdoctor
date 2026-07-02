@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { View, Text, ScrollView, Pressable, Modal, TextInput, Alert, Switch, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, Modal, TextInput, Switch, ActivityIndicator } from "react-native";
+import { Alert } from "@/lib/alert";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppBar } from "@/components/AppBar";
 import { Card } from "@/components/ui/Card";

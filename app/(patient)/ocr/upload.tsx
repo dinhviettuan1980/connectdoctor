@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, Pressable, Image, ScrollView, Alert } from "react-native";
+import { View, Text, Pressable, Image, ScrollView } from "react-native";
+import { Alert } from "@/lib/alert";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";

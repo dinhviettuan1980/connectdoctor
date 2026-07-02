@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, ScrollView, Alert, Platform } from "react-native";
+import { View, Text, ScrollView, Platform } from "react-native";
+import { Alert } from "@/lib/alert";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Input } from "@/components/ui/Input";
