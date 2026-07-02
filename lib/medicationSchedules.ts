@@ -15,6 +15,7 @@ export interface MedicationSchedule {
   minute: number;  // 0–59
   enabled: boolean;
   prescriptionId?: string | null;
+  meds?: string[]; // tên các thuốc cần uống ở buổi này — hiện trong nội dung thông báo
   createdAt: number;
 }
 
@@ -45,20 +46,22 @@ export async function addSchedule(
   hour: number,
   minute: number,
   prescriptionId?: string | null,
+  meds?: string[],
 ): Promise<string> {
   const ref = await addDoc(col(uid), {
     label, hour, minute, enabled: true,
     prescriptionId: prescriptionId ?? null,
+    ...(meds && meds.length > 0 ? { meds } : {}),
     createdAt: Date.now(),
   });
-  await scheduleMedicationReminder(ref.id, label, hour, minute, prescriptionId);
+  await scheduleMedicationReminder(ref.id, label, hour, minute, prescriptionId, meds);
   return ref.id;
 }
 
 export async function updateSchedule(
   uid: string,
   id: string,
-  fields: Partial<Pick<MedicationSchedule, "label" | "hour" | "minute" | "enabled" | "prescriptionId">>,
+  fields: Partial<Pick<MedicationSchedule, "label" | "hour" | "minute" | "enabled" | "prescriptionId" | "meds">>,
 ): Promise<void> {
   await updateDoc(doc(col(uid), id), fields as Record<string, unknown>);
   // Reschedule or cancel based on enabled state
@@ -67,7 +70,7 @@ export async function updateSchedule(
   } else {
     // Fetch latest to reschedule with correct values — caller passes full updated values
     if (fields.hour !== undefined && fields.minute !== undefined && fields.label !== undefined) {
-      await scheduleMedicationReminder(id, fields.label, fields.hour, fields.minute, fields.prescriptionId);
+      await scheduleMedicationReminder(id, fields.label, fields.hour, fields.minute, fields.prescriptionId, fields.meds);
     }
   }
 }

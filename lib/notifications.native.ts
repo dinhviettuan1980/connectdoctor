@@ -54,6 +54,7 @@ export async function scheduleMedicationReminder(
   hour: number,
   minute: number,
   prescriptionId?: string | null,
+  meds?: string[],
 ): Promise<void> {
   await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
 
@@ -62,11 +63,15 @@ export async function scheduleMedicationReminder(
   let rHour = hour;
   if (rMin < 0) { rMin += 60; rHour = (hour - 1 + 24) % 24; }
 
+  const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  const medsText = meds && meds.length > 0 ? `: ${meds.join(", ")}` : "";
+  const body = `${label}${medsText} — còn 5 phút nữa là ${time}`;
+
   await Notifications.scheduleNotificationAsync({
     identifier: id,
     content: {
       title: "⏰ Nhắc uống thuốc",
-      body: `${label} — còn 5 phút nữa là ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+      body,
       sound: "alarm.caf",
       data: { prescriptionId: prescriptionId ?? null },
     },

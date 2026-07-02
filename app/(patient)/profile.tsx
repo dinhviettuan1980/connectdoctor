@@ -857,7 +857,7 @@ function MedsTab() {
             await Promise.all(oldSchedules.map((s) => deleteSchedule(uid, s.id)));
             const activeBuoi = REMINDER_KEYWORDS.filter((t) => schedule[t].length > 0);
             await Promise.all(
-              activeBuoi.map((t) => addSchedule(uid, t, REMINDER_DEFAULT_HOUR[t], 0, rxId)),
+              activeBuoi.map((t) => addSchedule(uid, t, REMINDER_DEFAULT_HOUR[t], 0, rxId, schedule[t])),
             );
             const plan = formatSchedule(schedule);
             const title = aiSchedule ? "💊 Đã cập nhật lịch nhắc thuốc (AI 🤖)" : "💊 Đã cập nhật lịch nhắc thuốc";
@@ -1607,6 +1607,7 @@ function RemindersTab() {
   const [draftHour, setDraftHour] = useState(8);
   const [draftMinute, setDraftMinute] = useState(0);
   const [draftPrescriptionId, setDraftPrescriptionId] = useState<string | null>(null);
+  const [draftMeds, setDraftMeds] = useState<string[] | undefined>(undefined);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -1623,6 +1624,7 @@ function RemindersTab() {
   const openEdit = (s: MedicationSchedule) => {
     setDraftLabel(s.label); setDraftHour(s.hour); setDraftMinute(s.minute);
     setDraftPrescriptionId(s.prescriptionId ?? null);
+    setDraftMeds(s.meds);
     setEditId(s.id); setAdding(true);
   };
 
@@ -1634,6 +1636,7 @@ function RemindersTab() {
       await updateSchedule(user.uid, editId, {
         label: draftLabel.trim(), hour: draftHour, minute: draftMinute,
         enabled: true, prescriptionId: draftPrescriptionId,
+        ...(draftMeds ? { meds: draftMeds } : {}),
       });
       setAdding(false);
     } catch (err) {
@@ -1705,6 +1708,11 @@ function RemindersTab() {
               </Text>
               {rxLabel(s.prescriptionId) && (
                 <Text className="text-[10px] text-ink-3">{rxLabel(s.prescriptionId)}</Text>
+              )}
+              {s.meds && s.meds.length > 0 && (
+                <Text className="text-[11px] text-ink-2 mt-0.5" numberOfLines={2}>
+                  💊 {s.meds.join(", ")}
+                </Text>
               )}
             </View>
             <View className="flex-row items-center gap-3">
