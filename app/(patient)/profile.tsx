@@ -749,8 +749,9 @@ function MedsTab() {
     // Tự động nhận diện thuốc từ ảnh vừa thêm bằng AI, gộp vào danh sách thuốc hiện có
     // để người dùng chỉ cần sửa nếu sai rồi bấm "Lưu danh sách thuốc" (không chặn nếu OCR lỗi).
     setRecognizing(true);
+    let ocrError: string | null = null;
     try {
-      const detected = await extractMedsFromImage(uri);
+      const detected = await extractMedsFromImage(uri, (msg) => { ocrError = msg; });
       if (detected.length > 0) {
         const now = Date.now();
         const newMeds: Medication[] = detected.map((m, i) => ({
@@ -764,11 +765,13 @@ function MedsTab() {
         const current = prescriptions.find((p) => p.id === selectedId)?.meds ?? [];
         await updatePrescriptionMeds(selectedId, [...current, ...newMeds]);
         setOcrMsg(`✅ Đã nhận diện ${newMeds.length} thuốc từ ảnh — kiểm tra ở mục Thuốc bên trên rồi bấm "Lưu danh sách thuốc".`);
+      } else if (ocrError) {
+        setOcrMsg(`⚠️ Nhận diện thất bại (${ocrError}). Bạn có thể nhập tay ở mục Thuốc.`);
       } else {
         setOcrMsg("🤖 Không nhận diện được thuốc nào trong ảnh này. Bạn có thể nhập tay ở mục Thuốc.");
       }
-    } catch {
-      setOcrMsg("⚠️ Nhận diện thuốc từ ảnh thất bại. Bạn có thể nhập tay ở mục Thuốc.");
+    } catch (e) {
+      setOcrMsg(`⚠️ Nhận diện thuốc từ ảnh thất bại (${e instanceof Error ? e.message : String(e)}). Bạn có thể nhập tay ở mục Thuốc.`);
     } finally {
       setRecognizing(false);
     }

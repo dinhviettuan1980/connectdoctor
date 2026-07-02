@@ -33,7 +33,10 @@ async function postImage(endpoint: string, imageUri: string): Promise<any> {
   return res.json();
 }
 
-export async function extractMedsFromImage(imageUri: string): Promise<Partial<Medication>[]> {
+export async function extractMedsFromImage(
+  imageUri: string,
+  onError?: (message: string) => void,
+): Promise<Partial<Medication>[]> {
   try {
     const data = await postImage("prescription", imageUri);
     return (data.meds || [])
@@ -45,6 +48,7 @@ export async function extractMedsFromImage(imageUri: string): Promise<Partial<Me
       });
   } catch (e) {
     console.warn("extractMedsFromImage error", e);
+    onError?.(e instanceof Error ? e.message : String(e));
     return [];
   }
 }
