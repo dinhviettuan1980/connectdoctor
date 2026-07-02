@@ -45,10 +45,12 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
    (từ khoá sáng/trưa/chiều/tối, hoặc suy từ "N lần/ngày" nếu không có từ khoá) → gộp thành thông báo theo
    3 buổi Sáng/Chiều/Tối → gọi `notify()` (`lib/notify.ts`) gửi qua backend `/notify`. **Chưa tự tạo lịch
    nhắc thật (`MedicationSchedule`)** — đây chỉ là bước test theo yêu cầu, xem `TODO.md`.
-   **Phát hiện quan trọng khi test trực tiếp:** phần Telegram của `/notify` hiện **luôn thất bại** (email
-   vẫn gửi được) vì backend AWS bị chặn kết nối tới Telegram API và không có proxy nào thật sự được cấu
-   hình (dù có 1 dòng log gây hiểu lầm nói ngược lại) — xem chi tiết root cause ở `BUGS.md`. Test tính
-   năng này qua **email** cho tới khi proxy được setup.
+   **Update cùng ngày:** lúc đầu chẩn đoán sai là "AWS chặn Telegram" — user chỉ ra bot xổ số vẫn gửi
+   Telegram hàng ngày từ chính server này nên không thể do mạng. Root cause thật: `~/xsmbapi/telegram.js`
+   dùng thư viện `node-telegram-bot-api` bị lỗi HTTP client nội bộ trên Node 20, không liên quan mạng/proxy.
+   Đã fix bằng cách viết lại `telegram.js` dùng `fetch()` thuần (giống `bot.js` vẫn chạy tốt) — verify
+   `/notify` trả `telegram:true`. Chi tiết đầy đủ + lưu ý về gap deploy (server thiếu credential git cho
+   repo private `xsmbapi`, đã copy file qua `scp` thay vì `git pull`) ở `BUGS.md` và `TODO.md`.
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 

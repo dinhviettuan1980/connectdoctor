@@ -59,27 +59,37 @@
 - **Bài học:** tính năng background location mới trên iOS luôn cần cập nhật `Info.plist`
   (`app.json` → `ios.infoPlist`), không tự động có.
 
-### Telegram qua `lib/notify.ts` (backend `/notify`) không gửi được — infra, chưa fix
-- **Ngày phát hiện:** 2026-07-02, khi wire tính năng gửi lịch nhắc thuốc (phân tích từ đơn) qua Telegram
-  để test.
+### Telegram qua `lib/notify.ts` (backend `/notify`) không gửi được — ĐÃ FIX 2026-07-02 (đã sửa sai lầm chẩn đoán ban đầu)
+- **Ngày phát hiện & sửa:** 2026-07-02, khi wire tính năng gửi lịch nhắc thuốc (phân tích từ đơn) qua
+  Telegram để test.
 - **Triệu chứng:** gọi `POST https://api.tuandv.id.vn/notify` → `{"ok":true,"email":true,"telegram":false}`
-  — email gửi được, Telegram thì không.
-- **Nguyên nhân:** backend (`~/xsmbapi/telegram.js` trên VPS, xem `ARCHITECTURE.md` → "Hạ tầng
-  production") dùng `node-telegram-bot-api` gọi thẳng `api.telegram.org` **không qua proxy** — log báo
-  `[Telegram ERROR] EFATAL: AggregateError` (lỗi kết nối mạng). Comment trong code
-  (`index.js`: "Telegram (best-effort, server bị chặn nếu không có proxy)") và trong
-  `scripts/notify.mjs` ("the AWS backend is blocked from Telegram... Sends straight from the local
-  machine") xác nhận đây là giới hạn đã biết từ trước: **AWS chặn kết nối tới Telegram API**, và code có
-  1 dòng log "Đã gửi Telegram qua SOCKS5 proxy" nhưng **không có proxy nào thật sự được cấu hình** trong
-  `telegram.js` — dòng log đó gây hiểu lầm.
-- **Ảnh hưởng:** mọi tính năng trong app (chạy trên backend AWS) gọi `notify()` từ `lib/notify.ts` để gửi
-  Telegram đều sẽ âm thầm thất bại phần Telegram (email vẫn gửi được, response vẫn `ok:true` vì email
-  thành công). `scripts/agent-tasks.mjs`/`scripts/notify.mjs` (chạy trên máy dev, không qua AWS) thì gửi
-  Telegram bình thường — chỉ đường đi qua backend AWS mới bị chặn.
-- **Chưa fix:** cần 1 proxy (SOCKS5/HTTP) mà AWS instance có thể dùng để gọi ra Telegram API, rồi wire
-  vào `node-telegram-bot-api` qua request agent — việc này ngoài phạm vi 1 task nhỏ, để ở `TODO.md`.
-- **Workaround hiện tại:** dùng email (đã gửi được qua cùng endpoint `/notify`) để nhận thông báo test
-  từ app, thay vì Telegram, cho tới khi proxy được cấu hình.
+  — email gửi được, Telegram thì không, log báo `[Telegram ERROR] EFATAL: AggregateError`.
+- **Chẩn đoán SAI ban đầu (đã sửa lại):** lúc đầu kết luận "AWS chặn kết nối tới Telegram API, cần
+  proxy" dựa theo comment gây hiểu lầm trong code (`index.js`: "server bị chặn nếu không có proxy",
+  `telegram.js` log "Đã gửi Telegram qua SOCKS5 proxy" dù không hề có proxy nào). **User chỉ ra sai**:
+  bot gửi kết quả xổ số qua Telegram hàng ngày từ chính server này vẫn hoạt động bình thường — không thể
+  nào server bị chặn Telegram được.
+- **Nguyên nhân thật:** `curl`/`fetch` thẳng tới `api.telegram.org` từ server hoạt động hoàn hảo (đã test
+  trực tiếp, `200 OK`). `~/xsmbapi/bot.js` (gửi kết quả xổ số hàng ngày) dùng `fetch()` thuần và luôn
+  chạy tốt. Chỉ riêng `~/xsmbapi/telegram.js` (dùng cho endpoint `/notify`) dùng thư viện
+  `node-telegram-bot-api@0.66.0`, thư viện này dùng `@cypress/request` (fork của package `request` đã
+  deprecated) làm HTTP client nội bộ — package này lỗi TLS/kết nối trên Node 20 của server dù network
+  hoàn toàn thông (`RequestError: AggregateError` từ `request-promise-core`). Đây là vấn đề riêng của thư
+  viện, không phải mạng.
+- **Fix:** viết lại `~/xsmbapi/telegram.js` dùng `fetch()` thuần gọi thẳng `api.telegram.org/bot<token>/sendMessage`
+  — giống hệt cách `bot.js` đã làm và luôn chạy tốt — bỏ hẳn `node-telegram-bot-api` khỏi luồng gửi này
+  (dependency vẫn còn trong `package.json` của xsmbapi nhưng không còn code nào import nữa — có thể gỡ
+  sau, không khẩn cấp). Verify: `/notify` trả `{"ok":true,"email":true,"telegram":true}`.
+- **Lưu ý triển khai:** `xsmbapi` là repo **private** trên GitHub, và server (`3.27.76.114`) **không có
+  credential nào để `git pull` qua HTTPS** cho repo private (`deploy-xsmbapi.sh` chạy `git pull origin
+  main` sẽ luôn lỗi `fatal: could not read Username for 'https://github.com'`) — khác với
+  `connectdoctor` (repo public, server pull không cần auth). Đã push fix lên GitHub
+  (`dinhviettuan1980/xsmbapi@5baa697`) NHƯNG server đang chạy bản copy trực tiếp qua `scp` (không qua git
+  pull) vì user chọn bỏ qua việc setup credential cho lần này. Nếu sau này chạy `deploy-xsmbapi.sh` thủ
+  công mà không sửa gì thêm, `git pull` bước đó sẽ vẫn lỗi như cũ — cần biết trước để không bất ngờ.
+- **Bài học:** khi 1 tính năng "gửi ra ngoài" báo lỗi mơ hồ dạng mạng (EFATAL, timeout, connection
+  refused), đừng vội kết luận do firewall/proxy — so sánh với 1 đường gửi khác đã biết là hoạt động tốt
+  (ở đây là `bot.js`) trước khi kết luận nguyên nhân hạ tầng.
 
 ### Auto-OCR "nhận diện thất bại" — thực ra là Firestore từ chối field `undefined`
 - **Ngày phát hiện & sửa:** 2026-07-02, ngay sau khi thêm tính năng auto-OCR (commit `e421563`).

@@ -4,13 +4,14 @@
 
 ## High Priority
 
-- **Cấu hình proxy để backend `/notify` gửi Telegram thành công**
-  Mô tả: `POST /notify` trên backend AWS (`~/xsmbapi`) gửi email OK nhưng Telegram luôn thất bại
-  (`EFATAL: AggregateError`) vì AWS chặn kết nối tới `api.telegram.org` và không có proxy nào được cấu
-  hình thật (dòng log "qua SOCKS5 proxy" là log giả — xem `BUGS.md` 2026-07-02). Ảnh hưởng mọi tính năng
-  app gọi `notify()` (`lib/notify.ts`) để test qua Telegram, ví dụ lịch nhắc thuốc phân tích từ đơn.
-  Trạng thái: chưa bắt đầu. Cần: 1 SOCKS5/HTTP proxy AWS gọi được tới Telegram, wire vào
-  `node-telegram-bot-api` trong `~/xsmbapi/telegram.js`.
+- **Setup credential để `deploy-xsmbapi.sh` tự `git pull` được (repo private, server chưa có auth)**
+  Mô tả: `xsmbapi` là repo GitHub private; server (`3.27.76.114`) không có credential (PAT/deploy key) để
+  `git pull` qua HTTPS, nên `~/deploy-xsmbapi.sh` sẽ luôn lỗi
+  `fatal: could not read Username for 'https://github.com'` (khác với `connectdoctor` — repo public,
+  không cần auth để pull). Fix Telegram ngày 2026-07-02 phải copy file trực tiếp qua `scp` vì lý do này —
+  xem `BUGS.md`. User đã chọn bỏ qua việc setup credential ở thời điểm đó.
+  Trạng thái: chưa bắt đầu. Cần user tạo Personal Access Token hoặc deploy key trên GitHub cho repo
+  `xsmbapi` rồi cấu hình trên server (quyết định bảo mật, cần user xác nhận trước khi làm).
 
 - **Giấu API key Gemini sau Cloud Functions**
   Mô tả: `EXPO_PUBLIC_GEMINI_API_KEY` (dùng trong `lib/ai.ts` cho AI triage, key gắn thẳng vào query
