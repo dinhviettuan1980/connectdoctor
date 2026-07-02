@@ -41,6 +41,7 @@ import {
 import { requestNotificationPermission } from "@/lib/notifications";
 import { scanForHealthDevices, type HealthDevice } from "@/lib/ble";
 import { extractMedsFromImage } from "@/lib/ocr";
+import { notify } from "@/lib/notify";
 import type { EmergencyContact, Medication, MetricEntry, MetricType, PatientProfile } from "@/lib/types";
 import { EmergencyContacts } from "@/components/EmergencyContacts";
 import { FamilyGroups } from "@/components/FamilyGroups";
@@ -656,6 +657,47 @@ function InfoTab() {
 // Meds tab — prescription list with CRUD
 // ---------------------------------------------------------------------------
 
+// Giờ uống thuốc chỉ có 3 buổi cố định — người dùng chọn buổi rồi nhập giờ cụ thể, không gõ tay tên gợi nhớ.
+const REMINDER_KEYWORDS = ["Sáng", "Chiều", "Tối"] as const;
+const REMINDER_DEFAULT_HOUR: Record<(typeof REMINDER_KEYWORDS)[number], number> = {
+  "Sáng": 7, "Chiều": 12, "Tối": 19,
+};
+
+/**
+ * Đoán buổi uống thuốc từ câu chữ liều dùng (vd. "Ngày uống 1 viên buổi sáng, sau ăn").
+ * "Trưa" gộp vào "Chiều" vì app chỉ có đúng 3 buổi Sáng/Chiều/Tối.
+ * Không có từ khoá buổi cụ thể thì suy theo số lần/ngày (1→Sáng, 2→Sáng+Tối, 3+→cả 3 buổi).
+ */
+function detectMealTimes(doseText: string): (typeof REMINDER_KEYWORDS)[number][] {
+  const t = doseText.toLowerCase();
+  const times: (typeof REMINDER_KEYWORDS)[number][] = [];
+  if (/sáng/.test(t)) times.push("Sáng");
+  if (/trưa|chiều/.test(t)) times.push("Chiều");
+  if (/tối|đêm/.test(t)) times.push("Tối");
+  if (times.length > 0) return times;
+
+  const n = Number(t.match(/(\d+)\s*(?:lần|viên)\s*(?:\/|mỗi)?\s*ngày|ngày\s*uống\s*(\d+)\s*lần/)?.[1]);
+  if (n === 1) return ["Sáng"];
+  if (n === 2) return ["Sáng", "Tối"];
+  if (n >= 3) return ["Sáng", "Chiều", "Tối"];
+  return ["Sáng"]; // fallback khi không đoán được gì
+}
+
+/** Gộp danh sách thuốc thành thông báo dạng "Sáng: ... / Chiều: ... / Tối: ..." để gửi test qua Telegram. */
+function buildReminderPlanMessage(meds: Medication[]): string {
+  const byTime: Record<(typeof REMINDER_KEYWORDS)[number], string[]> = { "Sáng": [], "Chiều": [], "Tối": [] };
+  for (const m of meds) {
+    if (!m.name.trim()) continue;
+    for (const t of detectMealTimes(m.dose || "")) {
+      byTime[t].push(m.dose ? `${m.name} (${m.dose})` : m.name);
+    }
+  }
+  const lines = REMINDER_KEYWORDS
+    .filter((t) => byTime[t].length > 0)
+    .map((t) => `${t}:\n` + byTime[t].map((s) => `  • ${s}`).join("\n"));
+  return lines.length > 0 ? lines.join("\n\n") : "(Không phân tích được giờ uống từ đơn thuốc này)";
+}
+
 function MedsTab() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
@@ -790,8 +832,20 @@ function MedsTab() {
         await addImageToPrescription(selectedId, user.uid, pendingPhotoUri);
         setPendingPhotoUri(null);
       }
-      await updatePrescriptionMeds(selectedId, editableMeds.filter((m) => m.name.trim()));
+      const finalMeds = editableMeds.filter((m) => m.name.trim());
+      await updatePrescriptionMeds(selectedId, finalMeds);
       setOcrMsg(null);
+
+      // Chỉ phân tích lịch nhắc cho đơn thuốc MỚI NHẤT — đơn cũ bỏ qua.
+      // Tạm thời chỉ gửi kết quả phân tích qua Telegram để test, chưa tự tạo lịch nhắc thật.
+      const isNewest = prescriptions.every((p) => p.id === selectedId || p.createdAt <= (selected?.createdAt ?? 0));
+      if (isNewest && finalMeds.length > 0) {
+        const plan = buildReminderPlanMessage(finalMeds);
+        notify(
+          "💊 Lịch nhắc thuốc (test)",
+          `Đơn ngày ${selected ? formatDateTime(selected.createdAt) : ""}\n\n${plan}`,
+        ).catch(() => {});
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert("Lỗi", "Lưu thất bại. Thử lại.");
@@ -1520,12 +1574,6 @@ function reminderTime(hour: number, minute: number) {
   const rHour = minute < 5 ? (hour - 1 + 24) % 24 : hour;
   return `${pad2(rHour)}:${pad2(rMin)}`;
 }
-
-// Giờ uống thuốc chỉ có 3 buổi cố định — người dùng chọn buổi rồi nhập giờ cụ thể, không gõ tay tên gợi nhớ.
-const REMINDER_KEYWORDS = ["Sáng", "Chiều", "Tối"] as const;
-const REMINDER_DEFAULT_HOUR: Record<(typeof REMINDER_KEYWORDS)[number], number> = {
-  "Sáng": 7, "Chiều": 12, "Tối": 19,
-};
 
 function RemindersTab() {
   const user = useAuthStore((s) => s.user);
