@@ -4,10 +4,12 @@
 
 ## High Priority
 
-- **Giấu API key Gemini/Groq sau Cloud Functions**
-  Mô tả: `EXPO_PUBLIC_GEMINI_API_KEY` và key Groq (dùng trong `lib/ai.ts`, `lib/ocr.ts`) hiện bị lộ ra
-  client vì convention `EXPO_PUBLIC_*` của Expo. Cần chuyển các lời gọi AI/OCR sang Cloud Functions
-  (`functions/`) để giấu key trước khi lên production.
+- **Giấu API key Gemini sau Cloud Functions**
+  Mô tả: `EXPO_PUBLIC_GEMINI_API_KEY` (dùng trong `lib/ai.ts` cho AI triage, key gắn thẳng vào query
+  string `?key=...`) bị lộ ra client vì convention `EXPO_PUBLIC_*` của Expo. Cần chuyển lời gọi Gemini
+  sang Cloud Functions (`functions/`) để giấu key trước khi lên production.
+  **Cập nhật 2026-07-02:** `lib/ocr.ts` KHÔNG còn thuộc diện này — OCR đã gọi qua 1 service riêng
+  (`https://tuandv80-ocr-numbers.hf.space`) giữ key phía server, không lộ ở client.
   Trạng thái: chưa bắt đầu.
   Dependencies: cần thêm Cloud Function mới (ngoài `commitReview.ts` hiện có).
 
@@ -16,11 +18,16 @@
   thay vì `getDoc(doc(db, "doctorProfiles", id))`. Đây là TODO còn sót lại từ README gốc, vẫn chưa xong.
   Trạng thái: chưa bắt đầu.
 
-- **Test thủ công + push 2 tính năng vừa commit**
-  Mô tả: presence "đang online" trong chat (commit `e2e0161`) và structured meds editor (commit
-  `1b8df52`) đã commit local nhưng chưa test trên thiết bị/browser và chưa push lên `origin/master`.
-  Xem chi tiết ở `CURRENT_STATUS.md`.
-  Trạng thái: code xong, cần test rồi push.
+- **User xác nhận trên UI thật: presence online + auto-OCR khi thêm ảnh đơn thuốc**
+  Mô tả: 2 tính năng đã code, commit, push, và deploy lên production (`e2e0161`, `e421563`) nhưng chưa
+  được xác nhận hoạt động đúng trên UI thật. Xem `CURRENT_STATUS.md`.
+  Trạng thái: đã deploy, chờ xác nhận.
+
+- **Dọn dữ liệu ảnh/audio cũ bị lưu URL `localhost:8001` hỏng**
+  Mô tả: mọi ảnh đơn thuốc, file knowledge track, audio chat, avatar upload **trước** commit `e1b30be`
+  (2026-07-02) có thể đã lưu URL nội bộ không dùng được vào Firestore (xem `BUGS.md`). Cần rà & xoá/thêm
+  lại thủ công vì code fix chỉ áp dụng cho upload mới, không tự sửa dữ liệu cũ.
+  Trạng thái: chưa bắt đầu — chưa biết quy mô ảnh hưởng (chưa query Firestore để đếm).
 
 ## Medium Priority
 

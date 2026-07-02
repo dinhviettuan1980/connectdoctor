@@ -20,11 +20,13 @@ việc cho AI agent (Claude Code) làm việc trên chính repo này.
 - **Patient home**: hero + ô hỏi triệu chứng lớn → chuyển vào flow AI triage.
 - **AI triage**: hỏi đáp nhiều bước (multiple-choice) → danh sách bác sĩ gợi ý theo chuyên khoa.
 - **Chat**: nhắn tin real-time patient↔doctor; chat nhóm gia đình (family group); video call modal;
-  presence "đang online" (tính năng đang phát triển — xem `CURRENT_STATUS.md`).
+  presence "đang online" (đã lên production 2026-07-02).
 - **Hồ sơ bệnh nhân**: thông tin cá nhân, chỉ số sức khoẻ (huyết áp, đường huyết, ...), đơn thuốc
   (structured meds list + ghi chú tự do + ảnh chụp đơn).
-- **OCR**: chụp/upload ảnh đơn thuốc hoặc phiếu xét nghiệm → AI đọc và trích xuất dữ liệu có cấu trúc →
-  người dùng review/sửa → lưu thật vào Firestore (đơn thuốc / chỉ số).
+- **OCR**: 2 điểm vào — (1) flow riêng `ocr/upload → review → confirm` tạo đơn/chỉ số mới hoàn toàn từ
+  ảnh; (2) trong màn chỉnh sửa đơn thuốc thủ công (Hồ sơ → Đơn thuốc → mở 1 đơn), mỗi lần thêm ảnh cũng
+  tự động chạy OCR và gộp thuốc nhận diện được vào danh sách sẵn có (từ 2026-07-02) — cả 2 điểm vào đều
+  cho sửa lại thông tin trước khi lưu thật vào Firestore.
 - **Sức khoẻ & vị trí gia đình**: dashboard sức khoẻ (nhịp tim, số bước) từ đồng hồ Garmin (BLE), bản đồ
   vị trí GPS real-time của người thân, nút "Chỉ đường về nhà".
 - **Nhắc thuốc**: lịch nhắc uống thuốc bằng local notifications.

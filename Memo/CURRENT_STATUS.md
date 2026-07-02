@@ -3,28 +3,24 @@
 > Trạng thái thực tế mới nhất. Cập nhật file này sau mỗi task/milestone lớn.
 
 **Cập nhật lần cuối:** 2026-07-02
-**Branch:** `master`, đi trước `origin/master` 2 commit local (`e2e0161`, `1b8df52`) — **chưa push**.
-**HEAD:** `1b8df52` — feat(prescriptions): structured per-medication editor, note field freed up
+**Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
+(`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
+**HEAD:** `e421563` — feat(prescriptions): auto-OCR meds when adding a photo in manual editor
 
 ## Đang làm gì
 
-Hai luồng việc trước đây là uncommitted WIP nay đã **commit xong** (chưa push lên origin):
+Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy lên production:
 
-1. **Presence / trạng thái online trong chat** — commit `e2e0161`.
-   - `hooks/useOnlineStatus.ts` (mới) — hook subscribe `isOnline()` từ `lib/users.ts` cho danh sách uid,
-     hiển thị chấm "đang online" trong danh sách chat/thread.
-   - Wire vào `app/(doctor)/messages.tsx`, `app/(patient)/messages.tsx`,
-     `app/(doctor)/chat/[patientId].tsx`, `app/(patient)/chat/[doctorId].tsx`.
-2. **Structured meds editor trong hồ sơ bệnh nhân** — commit `1b8df52`.
-   - `app/(patient)/profile.tsx` — thêm `MedsEditor`, cho sửa từng thuốc (tên/liều/nhóm) có cấu trúc thay
-     vì chỉ note tự do; fallback hiển thị `note` cho đơn cũ chưa có `meds[]`.
-   - `lib/prescriptions.ts` — thêm `updatePrescriptionMeds`, `makeMedId`; `createPrescription` giờ nhận
-     `meds[]` trực tiếp.
-   - `app/(patient)/ocr/review.tsx` — OCR review giờ lưu thẳng `meds[]` có cấu trúc thay vì gộp thành 1
-     chuỗi `note`.
-
-**Chưa test thủ công trên thiết bị/browser** — cả 2 tính năng mới commit, nên chạy thử trước khi push
-hoặc merge PR nếu có quy trình đó.
+1. **Presence / trạng thái online trong chat** — commit `e2e0161`. `hooks/useOnlineStatus.ts` (mới) +
+   wiring vào 4 màn chat/messages. **Chưa được user xác nhận đã test trên UI thật.**
+2. **Structured meds editor** — commit `1b8df52`. `MedsEditor` trong `profile.tsx` cho sửa từng thuốc
+   (tên/liều/nhóm) có cấu trúc; fallback hiển thị `note` cho đơn cũ.
+3. **Fix bug production: upload ảnh trả về URL nội bộ không dùng được** — commit `1e665bc` (nginx) +
+   `e1b30be` (code). Root cause + fix chi tiết ở `BUGS.md`. **Đã user xác nhận ảnh hiện đúng sau fix.**
+4. **Auto-OCR khi thêm ảnh trong màn sửa đơn thuốc thủ công** — commit `e421563`. Trước đây chỉ có OCR ở
+   flow riêng (`ocr/upload`); giờ mỗi ảnh thêm vào trong `Hồ sơ → Đơn thuốc → mở 1 đơn` cũng tự chạy
+   `extractMedsFromImage` và gộp kết quả vào danh sách thuốc, dùng lại `MedsEditor`/nút "Lưu danh sách
+   thuốc" đã có sẵn. **Chưa được user xác nhận đã test trên UI thật** (chỉ mới deploy).
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 
@@ -43,7 +39,12 @@ hoặc merge PR nếu có quy trình đó.
 
 ## Task đang mở
 
-- Hoàn thiện + commit 2 luồng WIP ở trên (presence trong chat, structured meds editor).
+- User cần test trên UI thật: presence "đang online" trong chat, và auto-OCR khi thêm ảnh vào đơn thuốc
+  thủ công (2 mục 1 và 4 ở trên).
+- Ảnh/audio đã upload **trước** commit `e1b30be` (2026-07-02) vẫn có URL `localhost:8001` hỏng trong
+  Firestore — cần xoá và thêm lại thủ công, không tự khắc phục (xem `BUGS.md`).
+- Audit các site nginx khác trên VPS xem có thiếu `client_max_body_size` như `api.tuandv.id.vn` không
+  (xem `TODO.md`).
 - Chuyển API call Gemini/Groq ra Cloud Functions để giấu key trước khi lên production (xem
   `PROJECT_OVERVIEW.md` → ràng buộc, và `TODO.md`).
 
