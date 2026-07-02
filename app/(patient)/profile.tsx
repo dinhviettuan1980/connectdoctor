@@ -1620,31 +1620,21 @@ function RemindersTab() {
     return () => { unsubSchedules(); unsubRx(); };
   }, [user?.uid]);
 
-  const openAdd = () => {
-    const keyword = REMINDER_KEYWORDS.find((k) => !schedules.some((s) => s.label === k)) ?? REMINDER_KEYWORDS[0];
-    setDraftLabel(keyword); setDraftHour(REMINDER_DEFAULT_HOUR[keyword]); setDraftMinute(0);
-    setDraftPrescriptionId(prescriptions[0]?.id ?? null);
-    setEditId(null); setAdding(true);
-  };
-
   const openEdit = (s: MedicationSchedule) => {
     setDraftLabel(s.label); setDraftHour(s.hour); setDraftMinute(s.minute);
     setDraftPrescriptionId(s.prescriptionId ?? null);
     setEditId(s.id); setAdding(true);
   };
 
+  // Lịch nhắc giờ tự sinh từ đơn thuốc (xem MedsTab.handleSaveAll) — chỉ còn sửa giờ/buổi của lịch có sẵn.
   const handleSave = async () => {
-    if (!user?.uid || !draftLabel.trim()) return;
+    if (!user?.uid || !editId || !draftLabel.trim()) return;
     setSaving(true);
     try {
-      if (editId) {
-        await updateSchedule(user.uid, editId, {
-          label: draftLabel.trim(), hour: draftHour, minute: draftMinute,
-          enabled: true, prescriptionId: draftPrescriptionId,
-        });
-      } else {
-        await addSchedule(user.uid, draftLabel.trim(), draftHour, draftMinute, draftPrescriptionId);
-      }
+      await updateSchedule(user.uid, editId, {
+        label: draftLabel.trim(), hour: draftHour, minute: draftMinute,
+        enabled: true, prescriptionId: draftPrescriptionId,
+      });
       setAdding(false);
     } catch (err) {
       console.error("[saveSchedule]", err);
@@ -1692,12 +1682,12 @@ function RemindersTab() {
         <Note>Thông báo bị tắt. Vào Cài đặt → ConnectDoctor → Thông báo để bật.</Note>
       )}
 
-      <Button variant="primary" block onPress={openAdd}>+ Thêm giờ uống thuốc</Button>
-
       {schedules.length === 0 && !adding && (
         <View className="items-center py-12 gap-1">
           <Text className="text-sm text-ink-3">Chưa có lịch nhắc nào</Text>
-          <Text className="text-[11px] text-ink-4">Nhấn "+ Thêm" để tạo lịch nhắc uống thuốc</Text>
+          <Text className="text-[11px] text-ink-4">
+            Lịch nhắc sẽ tự động tạo khi bạn lưu đơn thuốc mới nhất ở tab "Đơn thuốc"
+          </Text>
         </View>
       )}
 
@@ -1761,9 +1751,7 @@ function RemindersTab() {
           />
           <View className="bg-paper rounded-t-2xl overflow-hidden" style={{ maxHeight: "85%" }}>
             <View className="flex-row justify-between items-center px-5 py-4 border-b border-line-soft">
-              <Text className="font-bold text-base text-ink">
-                {editId ? "Sửa lịch nhắc" : "Thêm lịch nhắc"}
-              </Text>
+              <Text className="font-bold text-base text-ink">Sửa lịch nhắc</Text>
               <Pressable onPress={() => setAdding(false)} hitSlop={12}>
                 <Text className="text-ink-3 text-base">✕</Text>
               </Pressable>
