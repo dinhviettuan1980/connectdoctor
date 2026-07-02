@@ -59,6 +59,28 @@
 - **Bài học:** tính năng background location mới trên iOS luôn cần cập nhật `Info.plist`
   (`app.json` → `ios.infoPlist`), không tự động có.
 
+### Telegram qua `lib/notify.ts` (backend `/notify`) không gửi được — infra, chưa fix
+- **Ngày phát hiện:** 2026-07-02, khi wire tính năng gửi lịch nhắc thuốc (phân tích từ đơn) qua Telegram
+  để test.
+- **Triệu chứng:** gọi `POST https://api.tuandv.id.vn/notify` → `{"ok":true,"email":true,"telegram":false}`
+  — email gửi được, Telegram thì không.
+- **Nguyên nhân:** backend (`~/xsmbapi/telegram.js` trên VPS, xem `ARCHITECTURE.md` → "Hạ tầng
+  production") dùng `node-telegram-bot-api` gọi thẳng `api.telegram.org` **không qua proxy** — log báo
+  `[Telegram ERROR] EFATAL: AggregateError` (lỗi kết nối mạng). Comment trong code
+  (`index.js`: "Telegram (best-effort, server bị chặn nếu không có proxy)") và trong
+  `scripts/notify.mjs` ("the AWS backend is blocked from Telegram... Sends straight from the local
+  machine") xác nhận đây là giới hạn đã biết từ trước: **AWS chặn kết nối tới Telegram API**, và code có
+  1 dòng log "Đã gửi Telegram qua SOCKS5 proxy" nhưng **không có proxy nào thật sự được cấu hình** trong
+  `telegram.js` — dòng log đó gây hiểu lầm.
+- **Ảnh hưởng:** mọi tính năng trong app (chạy trên backend AWS) gọi `notify()` từ `lib/notify.ts` để gửi
+  Telegram đều sẽ âm thầm thất bại phần Telegram (email vẫn gửi được, response vẫn `ok:true` vì email
+  thành công). `scripts/agent-tasks.mjs`/`scripts/notify.mjs` (chạy trên máy dev, không qua AWS) thì gửi
+  Telegram bình thường — chỉ đường đi qua backend AWS mới bị chặn.
+- **Chưa fix:** cần 1 proxy (SOCKS5/HTTP) mà AWS instance có thể dùng để gọi ra Telegram API, rồi wire
+  vào `node-telegram-bot-api` qua request agent — việc này ngoài phạm vi 1 task nhỏ, để ở `TODO.md`.
+- **Workaround hiện tại:** dùng email (đã gửi được qua cùng endpoint `/notify`) để nhận thông báo test
+  từ app, thay vì Telegram, cho tới khi proxy được cấu hình.
+
 ### Auto-OCR "nhận diện thất bại" — thực ra là Firestore từ chối field `undefined`
 - **Ngày phát hiện & sửa:** 2026-07-02, ngay sau khi thêm tính năng auto-OCR (commit `e421563`).
 - **Triệu chứng:** banner báo "Nhận diện thuốc từ ảnh thất bại (Function updateDoc() called with invalid

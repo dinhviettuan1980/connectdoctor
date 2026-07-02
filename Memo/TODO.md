@@ -4,6 +4,14 @@
 
 ## High Priority
 
+- **Cấu hình proxy để backend `/notify` gửi Telegram thành công**
+  Mô tả: `POST /notify` trên backend AWS (`~/xsmbapi`) gửi email OK nhưng Telegram luôn thất bại
+  (`EFATAL: AggregateError`) vì AWS chặn kết nối tới `api.telegram.org` và không có proxy nào được cấu
+  hình thật (dòng log "qua SOCKS5 proxy" là log giả — xem `BUGS.md` 2026-07-02). Ảnh hưởng mọi tính năng
+  app gọi `notify()` (`lib/notify.ts`) để test qua Telegram, ví dụ lịch nhắc thuốc phân tích từ đơn.
+  Trạng thái: chưa bắt đầu. Cần: 1 SOCKS5/HTTP proxy AWS gọi được tới Telegram, wire vào
+  `node-telegram-bot-api` trong `~/xsmbapi/telegram.js`.
+
 - **Giấu API key Gemini sau Cloud Functions**
   Mô tả: `EXPO_PUBLIC_GEMINI_API_KEY` (dùng trong `lib/ai.ts` cho AI triage, key gắn thẳng vào query
   string `?key=...`) bị lộ ra client vì convention `EXPO_PUBLIC_*` của Expo. Cần chuyển lời gọi Gemini
@@ -30,6 +38,14 @@
   Trạng thái: chưa bắt đầu — chưa biết quy mô ảnh hưởng (chưa query Firestore để đếm).
 
 ## Medium Priority
+
+- **Tự động tạo `MedicationSchedule` thật từ phân tích đơn thuốc (thay vì chỉ gửi Telegram test)**
+  Mô tả: từ commit `e550daa` (2026-07-02), khi lưu đơn thuốc mới nhất, app đã phân tích câu chữ liều
+  dùng thành buổi Sáng/Chiều/Tối (`detectMealTimes`/`buildReminderPlanMessage` trong `profile.tsx`) và
+  gửi kết quả qua Telegram để test — **chưa tự tạo lịch nhắc thật** (`addSchedule`/`lib/medicationSchedules.ts`).
+  Khi kết quả phân tích ổn định, nối vào `addSchedule` để tự tạo/cập nhật 3 lịch nhắc Sáng/Chiều/Tối
+  thật cho bệnh nhân thay vì chỉ thông báo.
+  Trạng thái: chưa bắt đầu — đang ở giai đoạn test qua Telegram/email theo yêu cầu.
 
 - **Native Google/Facebook sign-in qua `expo-auth-session`**
   Mô tả: README ghi nhận web đã dùng `signInWithPopup`/redirect nhưng native (iOS/Android) social sign-in

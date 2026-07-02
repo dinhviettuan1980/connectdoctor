@@ -5,7 +5,7 @@
 **Cập nhật lần cuối:** 2026-07-02
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
 (`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `a6889f6` — feat(reminders): restrict medication reminder label to Sáng/Chiều/Tối
+**HEAD:** `e550daa` — feat(prescriptions): analyze dose text into Sáng/Chiều/Tối on save, test via Telegram
 
 ## Đang làm gì
 
@@ -40,6 +40,15 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
    cho đúng. Thêm mới tự chọn buổi chưa dùng. Lịch nhắc cũ có label tự do (trước khi đổi) vẫn hiển thị
    bình thường, chỉ không có buổi nào được highlight sẵn khi mở Sửa. **Chưa được user xác nhận đã test
    trên UI thật.**
+8. **Phân tích đơn thuốc mới nhất → gửi test lịch nhắc qua Telegram** — commit `e550daa`. Khi bấm "Lưu"
+   trên đơn thuốc MỚI NHẤT (đơn cũ bị bỏ qua), `detectMealTimes()` đọc câu chữ liều dùng của từng thuốc
+   (từ khoá sáng/trưa/chiều/tối, hoặc suy từ "N lần/ngày" nếu không có từ khoá) → gộp thành thông báo theo
+   3 buổi Sáng/Chiều/Tối → gọi `notify()` (`lib/notify.ts`) gửi qua backend `/notify`. **Chưa tự tạo lịch
+   nhắc thật (`MedicationSchedule`)** — đây chỉ là bước test theo yêu cầu, xem `TODO.md`.
+   **Phát hiện quan trọng khi test trực tiếp:** phần Telegram của `/notify` hiện **luôn thất bại** (email
+   vẫn gửi được) vì backend AWS bị chặn kết nối tới Telegram API và không có proxy nào thật sự được cấu
+   hình (dù có 1 dòng log gây hiểu lầm nói ngược lại) — xem chi tiết root cause ở `BUGS.md`. Test tính
+   năng này qua **email** cho tới khi proxy được setup.
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 
