@@ -5,7 +5,7 @@
 **Cập nhật lần cuối:** 2026-07-02
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
 (`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `d1daf4b` — feat(prescriptions): stage photo + OCR meds, save both together on explicit Save
+**HEAD:** `a6889f6` — feat(reminders): restrict medication reminder label to Sáng/Chiều/Tối
 
 ## Đang làm gì
 
@@ -34,6 +34,12 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
    lúc. `MedsEditor` đổi thành controlled component (`meds`+`onChange`, không còn state/nút lưu riêng bên
    trong). Đóng modal khi có thay đổi chưa lưu giờ hỏi xác nhận trước khi mất dữ liệu. **Chưa được user
    xác nhận đã test trên UI thật.**
+7. **Lịch nhắc uống thuốc: giới hạn còn đúng 3 buổi Sáng/Chiều/Tối** — commit `a6889f6`. Trước đó
+   "Tên gợi nhớ" là free-text; giờ thay bằng `Segmented` chọn cố định 1 trong 3 buổi (`RemindersTab` trong
+   `profile.tsx`), chọn buổi tự set giờ mặc định (Sáng 7h / Chiều 12h / Tối 19h) để người dùng chỉnh lại
+   cho đúng. Thêm mới tự chọn buổi chưa dùng. Lịch nhắc cũ có label tự do (trước khi đổi) vẫn hiển thị
+   bình thường, chỉ không có buổi nào được highlight sẵn khi mở Sửa. **Chưa được user xác nhận đã test
+   trên UI thật.**
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 
