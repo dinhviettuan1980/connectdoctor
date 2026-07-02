@@ -5,7 +5,7 @@
 **Cập nhật lần cuối:** 2026-07-02
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
 (`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `e550daa` — feat(prescriptions): analyze dose text into Sáng/Chiều/Tối on save, test via Telegram
+**HEAD:** `bffd8ca` — feat: point connectdoctor at the new doctorapi backend, AI-classify meal times
 
 ## Đang làm gì
 
@@ -46,11 +46,31 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
    3 buổi Sáng/Chiều/Tối → gọi `notify()` (`lib/notify.ts`) gửi qua backend `/notify`. **Chưa tự tạo lịch
    nhắc thật (`MedicationSchedule`)** — đây chỉ là bước test theo yêu cầu, xem `TODO.md`.
    **Update cùng ngày:** lúc đầu chẩn đoán sai là "AWS chặn Telegram" — user chỉ ra bot xổ số vẫn gửi
-   Telegram hàng ngày từ chính server này nên không thể do mạng. Root cause thật: `~/xsmbapi/telegram.js`
-   dùng thư viện `node-telegram-bot-api` bị lỗi HTTP client nội bộ trên Node 20, không liên quan mạng/proxy.
-   Đã fix bằng cách viết lại `telegram.js` dùng `fetch()` thuần (giống `bot.js` vẫn chạy tốt) — verify
-   `/notify` trả `telegram:true`. Chi tiết đầy đủ + lưu ý về gap deploy (server thiếu credential git cho
-   repo private `xsmbapi`, đã copy file qua `scp` thay vì `git pull`) ở `BUGS.md` và `TODO.md`.
+   Telegram hàng ngày từ chính server này nên không thể do mạng. Root cause thật (lần 1):
+   `~/xsmbapi/telegram.js` dùng thư viện `node-telegram-bot-api` bị lỗi HTTP client nội bộ trên Node 20.
+   Đã đổi sang `fetch()` thuần — verify thành công lúc đó, nhưng **hoá ra chỉ là trùng hợp may mắn** (xem
+   mục 11 bên dưới — root cause thật sự sâu hơn, là race IPv6/IPv4 của chính `fetch()`).
+
+9. **Tách backend ConnectDoctor ra repo/service riêng `doctorapi`** (yêu cầu user, không phải bugfix) —
+   xem `DECISIONS.md` + `ARCHITECTURE.md` → "Hạ tầng production" để biết chi tiết đầy đủ. Tóm tắt: file
+   upload (đơn thuốc/avatar/audio) + `/notify` không còn dùng chung code với `xsmbapi` (app xổ số không
+   liên quan) nữa — chuyển sang repo `dinhviettuan1980/doctorapi`, deploy trên cùng VPS
+   (`doctorapi.tuandv.id.vn`, pm2 port 8022, SSL qua certbot). Đã migrate dữ liệu cũ (9.8MB đơn thuốc,
+   583MB audio knowledge) sang server mới; `connectdoctor`'s `EXPO_PUBLIC_STORAGE_URL` và `lib/notify.ts`
+   đã trỏ sang domain mới (commit `bffd8ca`). URL cũ (trước ngày này) vẫn hoạt động vì `xsmbapi`'s
+   storage-router giữ nguyên, không xoá. **Chưa được user xác nhận đã test trên UI thật.**
+   Nhân tiện cũng dựng subdomain `kinhdichapi.tuandv.id.vn` (SSL riêng) cho service `kinhdichapi` đã có
+   sẵn từ trước (trước đó chỉ chạy qua path `kinhdich.tuandv.id.vn/kinhdich`) — user tự thêm DNS record.
+10. **Đổi phân loại buổi uống thuốc (Sáng/Chiều/Tối) từ keyword sang AI thật (Groq)** — user hỏi lại và
+    phát hiện bước phân loại trước đó chỉ là keyword-matching, không phải AI như tưởng. Thêm
+    `POST /classify-meds` vào `doctorapi` (Groq `llama-3.1-8b-instant`), `app/(patient)/profile.tsx` gọi
+    qua `classifyMedTimes()` (`lib/notify.ts`), fallback về keyword cũ nếu AI lỗi. Xem `DECISIONS.md`.
+11. **Root cause thật của lỗi Telegram: `fetch()`/undici race IPv6/IPv4 và thua, không phải thư viện hay
+    proxy** — phát hiện khi build `/notify` cho `doctorapi` và thấy `fetch()` timeout **nhất quán** dù
+    cùng cách gọi đã "fix" cho `xsmbapi` lúc trước. `curl`/`https.request` với `family: 4` ép cứng đều
+    thành công ngay trên cùng IP. Đã sửa cả `doctorapi/telegram.js` VÀ `xsmbapi/telegram.js` dùng module
+    `https` + `family: 4` thay vì `fetch()`. Verify: gọi `/notify` lặp lại nhiều lần đều `telegram:true`.
+    Chi tiết đầy đủ ở `BUGS.md` — bài học: đừng tin 1 lần test thành công với lỗi mạng ngẫu nhiên.
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 
@@ -69,13 +89,16 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
 
 ## Task đang mở
 
-- User cần test trên UI thật: presence "đang online" trong chat, auto-OCR khi thêm ảnh vào đơn thuốc
-  thủ công, và các nút xoá/xác nhận trên web sau fix `Alert` (mục 1, 4, 5 ở trên).
+- User cần test trên UI thật: presence "đang online", auto-OCR đơn thuốc, nút xoá/xác nhận sau fix
+  `Alert`, và **quan trọng nhất — toàn bộ luồng upload ảnh/avatar/audio qua backend `doctorapi` mới**
+  (domain hoàn toàn khác so với trước, rủi ro cao nhất nếu có sai sót cấu hình).
+- Setup credential git cho server pull được `xsmbapi` + `doctorapi` (2 repo private) — hiện đang deploy
+  thủ công qua `scp` (xem `TODO.md`).
 - Ảnh/audio đã upload **trước** commit `e1b30be` (2026-07-02) vẫn có URL `localhost:8001` hỏng trong
   Firestore — cần xoá và thêm lại thủ công, không tự khắc phục (xem `BUGS.md`).
-- Audit các site nginx khác trên VPS xem có thiếu `client_max_body_size` như `api.tuandv.id.vn` không
-  (xem `TODO.md`).
-- Chuyển API call Gemini/Groq ra Cloud Functions để giấu key trước khi lên production (xem
+- Audit các site nginx khác trên VPS xem có thiếu `client_max_body_size` không (`doctorapi` đã có sẵn từ
+  đầu, xem `TODO.md`).
+- Chuyển API call Gemini ra Cloud Functions để giấu key trước khi lên production (xem
   `PROJECT_OVERVIEW.md` → ràng buộc, và `TODO.md`).
 
 ## Task bị block

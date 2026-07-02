@@ -4,14 +4,16 @@
 
 ## High Priority
 
-- **Setup credential để `deploy-xsmbapi.sh` tự `git pull` được (repo private, server chưa có auth)**
-  Mô tả: `xsmbapi` là repo GitHub private; server (`3.27.76.114`) không có credential (PAT/deploy key) để
-  `git pull` qua HTTPS, nên `~/deploy-xsmbapi.sh` sẽ luôn lỗi
-  `fatal: could not read Username for 'https://github.com'` (khác với `connectdoctor` — repo public,
-  không cần auth để pull). Fix Telegram ngày 2026-07-02 phải copy file trực tiếp qua `scp` vì lý do này —
-  xem `BUGS.md`. User đã chọn bỏ qua việc setup credential ở thời điểm đó.
-  Trạng thái: chưa bắt đầu. Cần user tạo Personal Access Token hoặc deploy key trên GitHub cho repo
-  `xsmbapi` rồi cấu hình trên server (quyết định bảo mật, cần user xác nhận trước khi làm).
+- **Setup credential để server tự `git pull` được cho `xsmbapi` VÀ `doctorapi` (2 repo private)**
+  Mô tả: server (`3.27.76.114`) không có credential GitHub (PAT/deploy key) để `git pull` qua HTTPS cho
+  repo private — `~/deploy-xsmbapi.sh` và tương lai `deploy-doctorapi.sh` sẽ luôn lỗi
+  `fatal: could not read Username for 'https://github.com'` (khác `connectdoctor` — repo public, pull
+  không cần auth). Đã phải `scp` code thủ công nhiều lần trong ngày 2026-07-02 vì lý do này — xem
+  `BUGS.md`/`ARCHITECTURE.md`. User đã chọn bỏ qua việc setup credential ở thời điểm đó.
+  Trạng thái: chưa bắt đầu. Cần user tạo Personal Access Token hoặc deploy key trên GitHub cho **cả 2
+  repo** rồi cấu hình trên server (quyết định bảo mật, cần user xác nhận trước khi làm). Nếu làm, nên
+  viết `~/deploy-doctorapi.sh` theo đúng pattern các script khác (hiện chưa có file này, deploy đang làm
+  thủ công qua `scp` + `pm2 restart`).
 
 - **Giấu API key Gemini sau Cloud Functions**
   Mô tả: `EXPO_PUBLIC_GEMINI_API_KEY` (dùng trong `lib/ai.ts` cho AI triage, key gắn thẳng vào query
@@ -27,9 +29,11 @@
   thay vì `getDoc(doc(db, "doctorProfiles", id))`. Đây là TODO còn sót lại từ README gốc, vẫn chưa xong.
   Trạng thái: chưa bắt đầu.
 
-- **User xác nhận trên UI thật: presence online + auto-OCR khi thêm ảnh đơn thuốc + Alert fix**
+- **User xác nhận trên UI thật: presence online, auto-OCR đơn thuốc, Alert fix, backend `doctorapi` mới**
   Mô tả: các tính năng/fix đã code, commit, push, và deploy lên production (`e2e0161`, `e421563`,
-  `7dd9523`) nhưng chưa được xác nhận hoạt động đúng trên UI thật. Xem `CURRENT_STATUS.md`.
+  `7dd9523`, `bffd8ca`) nhưng chưa được xác nhận hoạt động đúng trên UI thật — đặc biệt luồng upload ảnh
+  đơn thuốc/avatar/audio giờ đi qua domain hoàn toàn mới (`doctorapi.tuandv.id.vn`, xem `ARCHITECTURE.md`).
+  Xem `CURRENT_STATUS.md`.
   Trạng thái: đã deploy, chờ xác nhận.
 
 - **Dọn dữ liệu ảnh/audio cũ bị lưu URL `localhost:8001` hỏng**
@@ -41,9 +45,10 @@
 ## Medium Priority
 
 - **Tự động tạo `MedicationSchedule` thật từ phân tích đơn thuốc (thay vì chỉ gửi Telegram test)**
-  Mô tả: từ commit `e550daa` (2026-07-02), khi lưu đơn thuốc mới nhất, app đã phân tích câu chữ liều
-  dùng thành buổi Sáng/Chiều/Tối (`detectMealTimes`/`buildReminderPlanMessage` trong `profile.tsx`) và
-  gửi kết quả qua Telegram để test — **chưa tự tạo lịch nhắc thật** (`addSchedule`/`lib/medicationSchedules.ts`).
+  Mô tả: khi lưu đơn thuốc mới nhất, app phân tích câu chữ liều dùng thành buổi Sáng/Chiều/Tối và gửi kết
+  quả qua Telegram để test — **chưa tự tạo lịch nhắc thật** (`addSchedule`/`lib/medicationSchedules.ts`).
+  **Cập nhật 2026-07-02:** bước phân loại đã đổi từ keyword-matching cục bộ sang gọi AI thật
+  (`doctorapi`'s `POST /classify-meds`, dùng Groq — xem `DECISIONS.md`), fallback về keyword nếu AI lỗi.
   Khi kết quả phân tích ổn định, nối vào `addSchedule` để tự tạo/cập nhật 3 lịch nhắc Sáng/Chiều/Tối
   thật cho bệnh nhân thay vì chỉ thông báo.
   Trạng thái: chưa bắt đầu — đang ở giai đoạn test qua Telegram/email theo yêu cầu.
@@ -54,9 +59,10 @@
   Trạng thái: cần audit lại `lib/auth.ts`, `hooks/useGoogleSignIn.ts`, `hooks/useFacebookSignIn.ts`.
 
 - **Audit các site nginx khác trên VPS xem có thiếu `client_max_body_size` không**
-  Mô tả: đã sửa `api.tuandv.id.vn` (413 khi upload ảnh đơn thuốc >1MB, xem `BUGS.md` 2026-07-02) nhưng
-  chưa kiểm tra các site còn lại (`connectdoctor.tuandv.id.vn` chính nó, và site của project khác dùng
-  chung VPS) — nếu có luồng upload nào khác cũng có thể dính lỗi tương tự.
+  Mô tả: đã sửa `api.tuandv.id.vn` (413 khi upload ảnh đơn thuốc >1MB, xem `BUGS.md` 2026-07-02).
+  `doctorapi.tuandv.id.vn` (service mới) đã set sẵn `client_max_body_size 20m` ngay từ đầu — không cần
+  audit. Còn lại: `connectdoctor.tuandv.id.vn`, `kinhdichapi.tuandv.id.vn`, và site của project khác dùng
+  chung VPS chưa kiểm tra.
   Trạng thái: chưa bắt đầu.
 
 - **OCR offline native (ML Kit) làm fallback**

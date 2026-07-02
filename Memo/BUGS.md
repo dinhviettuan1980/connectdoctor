@@ -5,6 +5,28 @@
 
 ## Bug đã sửa (đáng nhớ — có thể tái diễn nếu không cẩn thận)
 
+### `fetch()` của Node timeout gọi Telegram trên VPS — do race IPv6/IPv4, không phải do thư viện hay proxy
+- **Ngày phát hiện & sửa:** 2026-07-02, khi build endpoint `/notify` cho `doctorapi` (service mới, xem
+  `ARCHITECTURE.md`).
+- **Bối cảnh:** cùng ngày trước đó đã "fix" `xsmbapi/telegram.js` bằng cách đổi từ `node-telegram-bot-api`
+  sang `fetch()` thuần (xem entry "Telegram qua lib/notify.ts..." bên dưới) — verify lúc đó thành công.
+  Nhưng khi viết `doctorapi/telegram.js` với **cùng cách gọi `fetch()`**, test lại nhiều lần đều
+  `ETIMEDOUT` — nghĩa là bản fix trước đó chỉ *tình cờ* thành công, không thật sự ổn định.
+- **Nguyên nhân:** `fetch()`/undici của Node trên VPS này thực hiện Happy Eyeballs (thử cả IPv6 lẫn IPv4
+  song song) khi gọi `api.telegram.org`. VPS không có route IPv6 thật (`ENETUNREACH` cho địa chỉ IPv6),
+  nhưng thay vì fallback nhanh sang IPv4, đôi khi bị "kẹt" và toàn bộ request timeout dù chính IP IPv4 đó
+  (`149.154.166.110`) **hoàn toàn phản hồi được** — đã verify bằng `curl`, `curl --resolve`, và
+  `net.connect` thô đều thành công tức thì trên cùng IP. Đây là race condition ngẫu nhiên trong cách
+  undici xử lý dual-stack, không phải do proxy, firewall, hay bot Telegram bị lỗi.
+- **Fix:** thay `fetch()` bằng module `https` built-in của Node, ép cứng `family: 4` trong request options
+  — bỏ qua hoàn toàn việc thử IPv6. Áp dụng cho cả `doctorapi/telegram.js` (commit doctorapi
+  `bed5911`) và `xsmbapi/telegram.js` (commit xsmbapi `600c5be`, để phòng bug tái diễn dù trước đó "có vẻ"
+  đã fix). Verify: gọi `/notify` liên tiếp 3 lần đều `telegram:true`.
+- **Bài học quan trọng:** đừng tin 1 lần test thành công là đã fix xong đối với lỗi mạng ngẫu
+  nhiên/timing-dependent — phải test lặp lại nhiều lần. Nếu code Node mới gọi `fetch()` ra ngoài và gặp
+  lỗi mơ hồ (`ETIMEDOUT`, `fetch failed`, `AggregateError`) mà `curl` cùng lúc lại chạy tốt, nghi ngờ
+  IPv6/dual-stack race trước, không phải nghi ngờ proxy/firewall/thư viện đích.
+
 ### Metro bundler chậm/hang trên Windows vì `functions/` và `expo-notifications`
 - **Triệu chứng:** Metro start rất chậm hoặc hang trên Windows.
 - **Nguyên nhân:** (1) `functions/node_modules` bị Metro watcher quét vào; (2) `expo-notifications` gây
@@ -60,6 +82,9 @@
   (`app.json` → `ios.infoPlist`), không tự động có.
 
 ### Telegram qua `lib/notify.ts` (backend `/notify`) không gửi được — ĐÃ FIX 2026-07-02 (đã sửa sai lầm chẩn đoán ban đầu)
+> **Cập nhật:** fix `fetch()` mô tả bên dưới chỉ *tình cờ* thành công lúc test — nguyên nhân sâu hơn
+> (race IPv6/IPv4 của `fetch()`/undici) và fix triệt để (ép `family: 4` qua module `https`) ở entry
+> "`fetch()` của Node timeout gọi Telegram trên VPS" phía trên.
 - **Ngày phát hiện & sửa:** 2026-07-02, khi wire tính năng gửi lịch nhắc thuốc (phân tích từ đơn) qua
   Telegram để test.
 - **Triệu chứng:** gọi `POST https://api.tuandv.id.vn/notify` → `{"ok":true,"email":true,"telegram":false}`

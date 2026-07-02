@@ -4,6 +4,42 @@
 
 ---
 
+### 2026-07-02 — Tách backend ConnectDoctor ra repo/service riêng (`doctorapi`)
+
+**Quyết định:** upload file (đơn thuốc, avatar, audio chat, audio knowledge) + `/notify`
+(Telegram/email) chuyển từ dùng chung code với `xsmbapi` (project xổ số không liên quan) sang 1 repo +
+service riêng `dinhviettuan1980/doctorapi`, deploy trên cùng VPS, port riêng (8022), subdomain riêng
+(`doctorapi.tuandv.id.vn`).
+
+**Lý do:** mọi bug hạ tầng gặp phải trong ngày 2026-07-02 (413 body size, URL localhost lộ ra ngoài,
+Telegram lỗi thư viện) đều nằm trong code của `xsmbapi` — một app hoàn toàn không liên quan tới
+ConnectDoctor. User yêu cầu tách ra để 2 app không còn ảnh hưởng lẫn nhau. Tiền lệ: user đã làm y hệt
+với `kinhdich` → `kinhdichapi` trước đó.
+
+**Trade-offs:** phải setup lại DNS/SSL/pm2 cho service mới (đã làm). Dữ liệu cũ (~9.8MB đơn thuốc,
+~583MB audio knowledge) đã copy sang `doctorapi` để dùng cho record mới, nhưng URL cũ trong Firestore
+(đơn thuốc/avatar/audio chat từ trước ngày này) vẫn trỏ về domain `api.tuandv.id.vn` cũ — phải giữ
+`xsmbapi`'s storage-router chạy song song vô thời hạn (hoặc tới khi ai đó viết script migrate URL cũ)
+để không vỡ link. Repo `doctorapi` private trên GitHub nhưng VPS chưa có credential để `git pull` tự
+động — phải deploy bằng `scp` thủ công (giống hạn chế đã biết với `xsmbapi`, xem `BUGS.md`/`TODO.md`).
+
+---
+
+### 2026-07-02 — Đổi cách phân loại giờ uống thuốc (Sáng/Chiều/Tối) từ keyword sang AI (Groq)
+
+**Quyết định:** thay vì tự suy luận buổi uống thuốc bằng regex/keyword-matching cục bộ trong app
+(`detectMealTimes`), gọi Groq (`llama-3.1-8b-instant`) qua endpoint mới `doctorapi`'s `POST
+/classify-meds`. Keyword-matching cũ vẫn giữ lại làm fallback khi gọi AI lỗi.
+
+**Lý do:** user chủ động yêu cầu ("dùng AI cho nó sang") sau khi biết bước phân loại buổi trước đó chỉ
+là keyword-matching thường, không phải AI như user tưởng.
+
+**Trade-offs:** tốn thêm 1 lần gọi AI (có phí, có độ trễ) mỗi khi lưu đơn thuốc mới nhất; kết quả AI
+không phải lúc nào cũng chính xác 100% (đã thấy 1 case AI xếp nhầm 1 thuốc uống 1 lần/ngày vào cả buổi
+Chiều) — chấp nhận được vì đây là tính năng đang ở giai đoạn test qua Telegram, chưa tạo lịch nhắc thật.
+
+---
+
 ### 2026-06-29 — Chuyển OCR từ Gemini/mock sang Groq vision
 
 **Quyết định:** `lib/ocr.ts` dùng Groq vision API để nhận dạng đơn thuốc & chỉ số xét nghiệm từ ảnh,
