@@ -663,10 +663,15 @@ function MedsTab() {
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [recognizing, setRecognizing] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const [ocrMsg, setOcrMsg] = useState<string | null>(null);
   const [viewImage, setViewImage] = useState<string | null>(null);
+
+  // Ảnh vừa chọn/chụp nhưng CHƯA upload — chỉ upload thật khi bấm "Lưu".
+  const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
+  // Bản nháp danh sách thuốc đang sửa (bao gồm cả thuốc AI vừa nhận diện) — CHƯA ghi Firestore.
+  const [editableMeds, setEditableMeds] = useState<Medication[]>([]);
 
   // 3 columns inside detail modal (modal width ≈ screen width, same padding)
   const thumbSize = (width - 48) / 3;
@@ -674,10 +679,21 @@ function MedsTab() {
   // Derive selected from live list so it auto-updates after photo add/remove
   const selected = prescriptions.find((p) => p.id === selectedId) ?? null;
 
+  const hasUnsavedChanges =
+    !!pendingPhotoUri || JSON.stringify(editableMeds) !== JSON.stringify(selected?.meds ?? []);
+
   useEffect(() => {
     if (!user?.uid) return;
     return subscribeToPrescriptions(user.uid, setPrescriptions);
   }, [user?.uid]);
+
+  // Nạp lại bản nháp mỗi khi mở 1 đơn khác (không chạy lại khi chính save của mình cập nhật selected.meds).
+  useEffect(() => {
+    setEditableMeds(selected?.meds ?? []);
+    setPendingPhotoUri(null);
+    setOcrMsg(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   // ── Create ──────────────────────────────────────────────────────────────
   const handleCreate = async () => {
@@ -713,7 +729,7 @@ function MedsTab() {
     ]);
   };
 
-  // ── Add image inside detail modal ────────────────────────────────────────
+  // ── Pick a photo (staged locally — chưa upload) + auto-OCR ────────────────
   const handleAddImage = async (fromCamera: boolean) => {
     if (!user?.uid || !selectedId) return;
     let result: ImagePicker.ImagePickerResult;
@@ -733,21 +749,10 @@ function MedsTab() {
     if (result.canceled || !result.assets?.[0]) return;
     const uri = result.assets[0].uri;
     setOcrMsg(null);
-    setUploading(true);
-    try {
-      await addImageToPrescription(selectedId, user.uid, uri);
-    } catch {
-      // Alert.alert là no-op trên web (react-native-web chưa cài đặt) — luôn hiện thêm banner
-      // inline để chắc chắn người dùng thấy lỗi trên mọi nền tảng.
-      Alert.alert("Lỗi", "Upload ảnh thất bại.");
-      setOcrMsg("⚠️ Upload ảnh thất bại. Thử lại.");
-      setUploading(false);
-      return;
-    }
-    setUploading(false);
+    setPendingPhotoUri(uri); // chỉ giữ tạm — chưa upload, chưa ghi Firestore
 
-    // Tự động nhận diện thuốc từ ảnh vừa thêm bằng AI, gộp vào danh sách thuốc hiện có
-    // để người dùng chỉ cần sửa nếu sai rồi bấm "Lưu danh sách thuốc" (không chặn nếu OCR lỗi).
+    // Tự động nhận diện thuốc từ ảnh vừa chọn bằng AI, gộp vào bản nháp danh sách thuốc.
+    // Không ghi gì vào Firestore ở đây — chỉ khi bấm "Lưu" mới upload ảnh + lưu thuốc thật.
     setRecognizing(true);
     let ocrError: string | null = null;
     try {
@@ -762,19 +767,51 @@ function MedsTab() {
           source: "ocr",
           createdAt: now,
         }));
-        const current = prescriptions.find((p) => p.id === selectedId)?.meds ?? [];
-        await updatePrescriptionMeds(selectedId, [...current, ...newMeds]);
-        setOcrMsg(`✅ Đã nhận diện ${newMeds.length} thuốc từ ảnh — kiểm tra ở mục Thuốc bên trên rồi bấm "Lưu danh sách thuốc".`);
+        setEditableMeds((prev) => [...prev, ...newMeds]);
+        setOcrMsg(`✅ Đã nhận diện ${newMeds.length} thuốc từ ảnh — kiểm tra ở mục Thuốc bên trên rồi bấm "Lưu" để lưu cả ảnh lẫn thuốc.`);
       } else if (ocrError) {
-        setOcrMsg(`⚠️ Nhận diện thất bại (${ocrError}). Bạn có thể nhập tay ở mục Thuốc.`);
+        setOcrMsg(`⚠️ Nhận diện thất bại (${ocrError}). Bấm "Lưu" để lưu ảnh, và nhập tay ở mục Thuốc nếu cần.`);
       } else {
-        setOcrMsg("🤖 Không nhận diện được thuốc nào trong ảnh này. Bạn có thể nhập tay ở mục Thuốc.");
+        setOcrMsg('🤖 Không nhận diện được thuốc nào trong ảnh này. Bấm "Lưu" để lưu ảnh, và nhập tay ở mục Thuốc nếu cần.');
       }
     } catch (e) {
-      setOcrMsg(`⚠️ Nhận diện thuốc từ ảnh thất bại (${e instanceof Error ? e.message : String(e)}). Bạn có thể nhập tay ở mục Thuốc.`);
+      setOcrMsg(`⚠️ Nhận diện thuốc từ ảnh thất bại (${e instanceof Error ? e.message : String(e)}). Bấm "Lưu" để lưu ảnh, và nhập tay ở mục Thuốc nếu cần.`);
     } finally {
       setRecognizing(false);
     }
+  };
+
+  // ── Lưu thật: upload ảnh đang chờ (nếu có) + ghi danh sách thuốc ──────────
+  const handleSaveAll = async () => {
+    if (!user?.uid || !selectedId || savingAll) return;
+    setSavingAll(true);
+    try {
+      if (pendingPhotoUri) {
+        await addImageToPrescription(selectedId, user.uid, pendingPhotoUri);
+        setPendingPhotoUri(null);
+      }
+      await updatePrescriptionMeds(selectedId, editableMeds.filter((m) => m.name.trim()));
+      setOcrMsg(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Lỗi", "Lưu thất bại. Thử lại.");
+      setOcrMsg(`⚠️ Lưu thất bại (${msg}).`);
+    } finally {
+      setSavingAll(false);
+    }
+  };
+
+  // ── Đóng modal — cảnh báo nếu có thay đổi chưa lưu ────────────────────────
+  const handleCloseModal = () => {
+    if (hasUnsavedChanges) {
+      Alert.alert("Có thay đổi chưa lưu", "Đóng mà không lưu ảnh/danh sách thuốc vừa sửa?", [
+        { text: "Tiếp tục sửa", style: "cancel" },
+        { text: "Đóng, không lưu", style: "destructive", onPress: () => { setOcrMsg(null); setSelectedId(null); } },
+      ]);
+      return;
+    }
+    setOcrMsg(null);
+    setSelectedId(null);
   };
 
   return (
@@ -858,7 +895,7 @@ function MedsTab() {
       <Modal
         visible={!!selected}
         animationType="slide"
-        onRequestClose={() => { setOcrMsg(null); setSelectedId(null); }}
+        onRequestClose={handleCloseModal}
       >
         <SafeAreaView className="flex-1 bg-paper">
           <KeyboardAvoidingView
@@ -871,36 +908,20 @@ function MedsTab() {
                 <Text className="font-mono text-xs font-bold text-ink">
                   {selected ? formatDateTime(selected.createdAt) : ""}
                 </Text>
-                <Pressable onPress={() => { setOcrMsg(null); setSelectedId(null); }} className="p-1">
+                <Pressable onPress={handleCloseModal} className="p-1">
                   <Text className="text-base text-ink-2">✕ Đóng</Text>
                 </Pressable>
               </View>
 
-              {/* Meds editor (cấu trúc từng thuốc) — remount khi updatedAt đổi để hiện thuốc AI vừa nhận diện */}
-              <MedsEditor
-                key={`meds-${selected?.id}-${selected?.updatedAt}`}
-                initialMeds={selected?.meds ?? []}
-                onSave={(meds) => selected && updatePrescriptionMeds(selected.id, meds)}
-              />
+              {/* Meds editor (cấu trúc từng thuốc) — controlled, bản nháp chưa lưu cho tới khi bấm "Lưu" */}
+              <MedsEditor meds={editableMeds} onChange={setEditableMeds} />
 
-              {/* Note editor (ghi chú tự do) */}
+              {/* Note editor (ghi chú tự do) — lưu riêng, không phụ thuộc nút "Lưu" bên dưới */}
               <NoteEditor
                 key={selected?.id}
                 initialNote={selected?.note ?? ""}
                 onSave={(note) => selected && updatePrescriptionNote(selected.id, note)}
               />
-
-              {/* Photos section */}
-              <Text className="text-[10px] uppercase tracking-wider text-ink-3 mt-1">
-                Ảnh đơn thuốc ({selected?.images.length ?? 0})
-              </Text>
-
-              {uploading && (
-                <View className="flex-row items-center gap-2">
-                  <ActivityIndicator size="small" />
-                  <Text className="text-xs text-ink-3">Đang upload…</Text>
-                </View>
-              )}
 
               {recognizing && (
                 <View className="flex-row items-center gap-2">
@@ -914,6 +935,18 @@ function MedsTab() {
                   <Text className="text-xs text-accent-ink">{ocrMsg}</Text>
                 </View>
               )}
+
+              {/* Nút Lưu — chỉ hiện khi có thay đổi chưa lưu (ảnh mới chọn và/hoặc danh sách thuốc sửa) */}
+              {hasUnsavedChanges && (
+                <Button variant="primary" block onPress={handleSaveAll} loading={savingAll} disabled={recognizing}>
+                  💾 Lưu {pendingPhotoUri ? "ảnh & danh sách thuốc" : "danh sách thuốc"}
+                </Button>
+              )}
+
+              {/* Photos section */}
+              <Text className="text-[10px] uppercase tracking-wider text-ink-3 mt-1">
+                Ảnh đơn thuốc ({selected?.images.length ?? 0})
+              </Text>
 
               {/* Photo grid */}
               <View className="flex-row flex-wrap gap-2">
@@ -939,17 +972,46 @@ function MedsTab() {
                     </Pressable>
                   </View>
                 ))}
+                {/* Ảnh đang chờ lưu — chưa upload, chỉ preview từ URI cục bộ */}
+                {pendingPhotoUri && (
+                  <View style={{ width: thumbSize }}>
+                    <View style={{ position: "relative" }}>
+                      <Image
+                        source={{ uri: pendingPhotoUri }}
+                        style={{ width: thumbSize, height: thumbSize * 1.35, borderRadius: 8, backgroundColor: "#f1f0ea", opacity: 0.6 }}
+                        resizeMode="cover"
+                      />
+                      <View style={{
+                        position: "absolute", bottom: 4, left: 4, right: 4,
+                        backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 4, paddingVertical: 2,
+                      }}>
+                        <Text style={{ color: "#fff", fontSize: 9, textAlign: "center" }}>Chưa lưu</Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      onPress={() => setPendingPhotoUri(null)}
+                      style={{
+                        position: "absolute", top: 4, right: 4,
+                        width: 20, height: 20, borderRadius: 10,
+                        backgroundColor: "rgba(0,0,0,0.55)",
+                        alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 11, lineHeight: 12 }}>✕</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
 
               {/* Add photo buttons */}
               <View className="flex-row gap-2">
                 <View className="flex-1">
-                  <Button block onPress={() => handleAddImage(false)} disabled={uploading || recognizing}>
+                  <Button block onPress={() => handleAddImage(false)} disabled={recognizing || savingAll}>
                     📁 Chọn file
                   </Button>
                 </View>
                 <View className="flex-1">
-                  <Button variant="primary" block onPress={() => handleAddImage(true)} disabled={uploading || recognizing}>
+                  <Button variant="primary" block onPress={() => handleAddImage(true)} disabled={recognizing || savingAll}>
                     📷 Chụp ảnh
                   </Button>
                 </View>
@@ -1018,17 +1080,15 @@ function NoteEditor({ initialNote, onSave }: { initialNote: string; onSave: (v: 
 }
 
 // Controlled structured-meds editor — sửa từng thuốc (tên / liều / nhóm), lưu cả mảng.
-function MedsEditor({ initialMeds, onSave }: { initialMeds: Medication[]; onSave: (v: Medication[]) => void }) {
-  const [meds, setMeds] = useState<Medication[]>(initialMeds);
-  const dirty = JSON.stringify(meds) !== JSON.stringify(initialMeds);
-
+// Controlled — cha (MedsTab) giữ state thật + quyết định khi nào lưu (nút "Lưu" dùng chung với ảnh).
+function MedsEditor({ meds, onChange }: { meds: Medication[]; onChange: (v: Medication[]) => void }) {
   const upd = (i: number, k: "name" | "dose" | "category", v: string) =>
-    setMeds((p) => p.map((m, idx) => (idx === i ? { ...m, [k]: v } : m)));
-  const del = (i: number) => setMeds((p) => p.filter((_, idx) => idx !== i));
+    onChange(meds.map((m, idx) => (idx === i ? { ...m, [k]: v } : m)));
+  const del = (i: number) => onChange(meds.filter((_, idx) => idx !== i));
   const add = () =>
-    setMeds((p) => [
-      ...p,
-      { id: makeMedId(p.length), name: "", dose: "", category: undefined, source: "manual", createdAt: Date.now() },
+    onChange([
+      ...meds,
+      { id: makeMedId(meds.length), name: "", dose: "", category: undefined, source: "manual", createdAt: Date.now() },
     ]);
 
   const inputCls = {
@@ -1066,14 +1126,6 @@ function MedsEditor({ initialMeds, onSave }: { initialMeds: Medication[]; onSave
       <Pressable onPress={add} className="self-start">
         <Text className="text-xs text-accent-ink">＋ Thêm thuốc</Text>
       </Pressable>
-      {dirty && (
-        <Pressable
-          onPress={() => onSave(meds.filter((m) => m.name.trim()).map((m) => ({ ...m, category: m.category?.trim() || undefined })))}
-          className="self-end"
-        >
-          <Text className="text-xs text-accent-ink">Lưu danh sách thuốc</Text>
-        </Pressable>
-      )}
     </View>
   );
 }
