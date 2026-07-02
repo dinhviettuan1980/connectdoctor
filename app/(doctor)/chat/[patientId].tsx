@@ -27,8 +27,7 @@ import { formatTime } from "@/lib/time";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { ChatMessage } from "@/lib/types";
 import VideoCallModal from "@/components/VideoCallModal";
-
-const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
+import { STORAGE_URL, resolvePublicStorageUrl } from "@/lib/storage";
 
 async function uploadAudio(uid: string, uri: string): Promise<string> {
   const key = `chat-audio/${uid}/${Date.now()}.m4a`;
@@ -40,7 +39,7 @@ async function uploadAudio(uid: string, uri: string): Promise<string> {
   const up = await fetch(`${STORAGE_URL}/upload`, { method: "POST", body: form });
   if (!up.ok) throw new Error("Audio upload failed");
   const { url } = (await up.json()) as { url: string };
-  return url;
+  return resolvePublicStorageUrl(url);
 }
 
 function fmtSecs(s: number): string {

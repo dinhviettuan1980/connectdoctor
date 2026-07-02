@@ -8,8 +8,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useAuthStore } from "@/hooks/useAuth";
 import { signOut } from "@/lib/auth";
-
-const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
+import { STORAGE_URL, resolvePublicStorageUrl } from "@/lib/storage";
 
 const ROLE_LABEL: Record<string, string> = {
   patient: "Bệnh nhân",
@@ -31,13 +30,7 @@ async function uploadAvatar(uri: string, uid: string): Promise<string> {
   const res = await fetch(`${STORAGE_URL}/upload`, { method: "POST", body: formData });
   if (!res.ok) throw new Error("Upload failed");
   const json = await res.json();
-  // Server may return a localhost URL when running behind a reverse proxy.
-  // Rewrite to the correct public base so the stored URL is always fetchable.
-  const rawUrl: string = json.url;
-  const publicUrl = rawUrl.startsWith("http")
-    ? STORAGE_URL + new URL(rawUrl).pathname.replace(/^\/storage/, "")
-    : rawUrl;
-  return publicUrl;
+  return resolvePublicStorageUrl(json.url as string);
 }
 
 export function UserMenu() {

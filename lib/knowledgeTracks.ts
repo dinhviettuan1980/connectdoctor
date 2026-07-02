@@ -3,8 +3,7 @@ import {
   query, orderBy, onSnapshot,
 } from "firebase/firestore";
 import { db } from "./firebase";
-
-const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
+import { STORAGE_URL, resolvePublicStorageUrl } from "./storage";
 
 export interface KnowledgeTrack {
   id: string;
@@ -67,7 +66,8 @@ export async function uploadTrackFile(
   form.append("key", key);
   const up = await fetch(`${STORAGE_URL}/upload`, { method: "POST", body: form });
   if (!up.ok) throw new Error("Storage upload failed");
-  return up.json() as Promise<{ url: string; key: string }>;
+  const { url, key: returnedKey } = (await up.json()) as { url: string; key: string };
+  return { url: resolvePublicStorageUrl(url), key: returnedKey };
 }
 
 export function parseDurationMs(str: string): number {

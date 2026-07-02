@@ -4,8 +4,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Medication } from "./types";
-
-const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
+import { STORAGE_URL, resolvePublicStorageUrl } from "./storage";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,7 +46,7 @@ async function uploadToStorage(patientUid: string, imageUri: string): Promise<Pr
   const up = await fetch(`${STORAGE_URL}/upload`, { method: "POST", body: form });
   if (!up.ok) throw new Error("Storage upload failed");
   const { url } = (await up.json()) as { url: string };
-  return { url, storageKey };
+  return { url: resolvePublicStorageUrl(url), storageKey };
 }
 
 async function deleteFromStorage(storageKey: string): Promise<void> {
