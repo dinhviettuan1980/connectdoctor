@@ -4,16 +4,6 @@
 
 ## High Priority
 
-- **Thay `Alert.alert()` bằng helper cross-platform trên toàn app (web hiện không hoạt động)**
-  Mô tả: `Alert.alert()` là no-op hoàn toàn trên web build (xem `BUGS.md` 2026-07-02) — mọi thông báo lỗi
-  VÀ mọi hộp thoại xác nhận hành động (destructive, ví dụ nút "Xoá đơn thuốc này") đều không hiện gì và
-  không chạy `onPress` trên web. Ảnh hưởng 42 lời gọi / 9 file (`profile.tsx`, `EmergencyContacts.tsx`,
-  `family-group/[id].tsx`, `ocr/review.tsx`, `ocr/upload.tsx`, `sign-up.tsx`, `tasks.tsx`,
-  `FamilyGroups.tsx`, `NewChatSheet.tsx`). Cần viết 1 helper cross-platform (web: `window.confirm`/
-  `window.alert`; native: `Alert.alert`) rồi thay hết các chỗ gọi trực tiếp.
-  Trạng thái: đã fix cục bộ 1 chỗ (`profile.tsx` — luồng auto-OCR, commit `422a6b2`), 41 chỗ còn lại
-  **chưa fix**. Ưu tiên cao vì ảnh hưởng cả các thao tác xoá dữ liệu trên web.
-
 - **Giấu API key Gemini sau Cloud Functions**
   Mô tả: `EXPO_PUBLIC_GEMINI_API_KEY` (dùng trong `lib/ai.ts` cho AI triage, key gắn thẳng vào query
   string `?key=...`) bị lộ ra client vì convention `EXPO_PUBLIC_*` của Expo. Cần chuyển lời gọi Gemini
@@ -28,9 +18,9 @@
   thay vì `getDoc(doc(db, "doctorProfiles", id))`. Đây là TODO còn sót lại từ README gốc, vẫn chưa xong.
   Trạng thái: chưa bắt đầu.
 
-- **User xác nhận trên UI thật: presence online + auto-OCR khi thêm ảnh đơn thuốc**
-  Mô tả: 2 tính năng đã code, commit, push, và deploy lên production (`e2e0161`, `e421563`) nhưng chưa
-  được xác nhận hoạt động đúng trên UI thật. Xem `CURRENT_STATUS.md`.
+- **User xác nhận trên UI thật: presence online + auto-OCR khi thêm ảnh đơn thuốc + Alert fix**
+  Mô tả: các tính năng/fix đã code, commit, push, và deploy lên production (`e2e0161`, `e421563`,
+  `7dd9523`) nhưng chưa được xác nhận hoạt động đúng trên UI thật. Xem `CURRENT_STATUS.md`.
   Trạng thái: đã deploy, chờ xác nhận.
 
 - **Dọn dữ liệu ảnh/audio cũ bị lưu URL `localhost:8001` hỏng**
@@ -74,3 +64,9 @@
   health, garmin, tasks, knowledge, notifications, v.v.). `ARCHITECTURE.md` trong `Memo/` đã là bản đúng —
   README chỉ cần đồng bộ lại cho người mới vào repo qua GitHub.
   Trạng thái: chưa bắt đầu.
+
+- **"Đổi tên nhóm gia đình" không có UI thật trên Android**
+  Mô tả: `family-group/[id].tsx` dùng `Alert.prompt` để đổi tên nhóm — API này chỉ có trên iOS thật.
+  Sau fix `lib/alert.ts` (2026-07-02, xem `BUGS.md`), Android không còn crash nhưng tính năng lặng lẽ
+  không làm gì (chỉ `console.warn`). Cần 1 modal + TextInput riêng nếu muốn hoạt động đầy đủ trên Android.
+  Trạng thái: chưa bắt đầu — tính năng phụ, không phải luồng chính.

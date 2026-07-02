@@ -5,7 +5,7 @@
 **Cập nhật lần cuối:** 2026-07-02
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
 (`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `e421563` — feat(prescriptions): auto-OCR meds when adding a photo in manual editor
+**HEAD:** `7dd9523` — fix(alert): add cross-platform Alert shim, fix no-op-on-web everywhere
 
 ## Đang làm gì
 
@@ -17,10 +17,15 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
    (tên/liều/nhóm) có cấu trúc; fallback hiển thị `note` cho đơn cũ.
 3. **Fix bug production: upload ảnh trả về URL nội bộ không dùng được** — commit `1e665bc` (nginx) +
    `e1b30be` (code). Root cause + fix chi tiết ở `BUGS.md`. **Đã user xác nhận ảnh hiện đúng sau fix.**
-4. **Auto-OCR khi thêm ảnh trong màn sửa đơn thuốc thủ công** — commit `e421563`. Trước đây chỉ có OCR ở
-   flow riêng (`ocr/upload`); giờ mỗi ảnh thêm vào trong `Hồ sơ → Đơn thuốc → mở 1 đơn` cũng tự chạy
-   `extractMedsFromImage` và gộp kết quả vào danh sách thuốc, dùng lại `MedsEditor`/nút "Lưu danh sách
-   thuốc" đã có sẵn. **Chưa được user xác nhận đã test trên UI thật** (chỉ mới deploy).
+4. **Auto-OCR khi thêm ảnh trong màn sửa đơn thuốc thủ công** — commit `e421563`, feedback UI sửa lại ở
+   commit `422a6b2` (banner inline thay vì `Alert.alert`, xem mục 5). Mỗi ảnh thêm vào trong
+   `Hồ sơ → Đơn thuốc → mở 1 đơn` giờ tự chạy `extractMedsFromImage` và gộp kết quả vào danh sách thuốc,
+   dùng lại `MedsEditor`/nút "Lưu danh sách thuốc" đã có sẵn. **Chưa được user xác nhận đã test trên UI
+   thật sau bản fix banner.**
+5. **Fix bug hệ thống: `Alert.alert`/`Alert.prompt` không hoạt động trên web (và `prompt` crash trên
+   Android)** — commit `7dd9523`. Thêm `lib/alert.ts`, đổi import ở 9 file. Root cause + phạm vi chi tiết
+   ở `BUGS.md`. **Chưa được user xác nhận đã test trên UI thật** (đặc biệt các nút xoá — "Xoá đơn thuốc
+   này", "Xoá liên hệ", "Giải tán nhóm", v.v. — trước đây không hoạt động gì trên web).
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 
@@ -39,8 +44,8 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
 
 ## Task đang mở
 
-- User cần test trên UI thật: presence "đang online" trong chat, và auto-OCR khi thêm ảnh vào đơn thuốc
-  thủ công (2 mục 1 và 4 ở trên).
+- User cần test trên UI thật: presence "đang online" trong chat, auto-OCR khi thêm ảnh vào đơn thuốc
+  thủ công, và các nút xoá/xác nhận trên web sau fix `Alert` (mục 1, 4, 5 ở trên).
 - Ảnh/audio đã upload **trước** commit `e1b30be` (2026-07-02) vẫn có URL `localhost:8001` hỏng trong
   Firestore — cần xoá và thêm lại thủ công, không tự khắc phục (xem `BUGS.md`).
 - Audit các site nginx khác trên VPS xem có thiếu `client_max_body_size` như `api.tuandv.id.vn` không
