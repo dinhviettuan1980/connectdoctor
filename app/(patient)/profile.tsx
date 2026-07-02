@@ -35,7 +35,7 @@ import { useRouter } from "expo-router";
 import { addMetric, updateMetric, deleteMetric, subscribeToMetrics } from "@/lib/metrics";
 import { getPatientProfile, savePatientProfile } from "@/lib/patientProfile";
 import {
-  addSchedule, updateSchedule, deleteSchedule,
+  addSchedule, updateSchedule, deleteSchedule, getSchedulesOnce,
   subscribeToSchedules, type MedicationSchedule,
 } from "@/lib/medicationSchedules";
 import { requestNotificationPermission } from "@/lib/notifications";
@@ -691,7 +691,7 @@ function formatSchedule(byTime: Record<(typeof REMINDER_KEYWORDS)[number], strin
 }
 
 /** Fallback cục bộ (keyword-matching) khi gọi AI phân loại (classifyMedTimes) lỗi. */
-function buildReminderPlanMessage(meds: Medication[]): string {
+function computeLocalSchedule(meds: Medication[]): Record<(typeof REMINDER_KEYWORDS)[number], string[]> {
   const byTime: Record<(typeof REMINDER_KEYWORDS)[number], string[]> = { "Sáng": [], "Chiều": [], "Tối": [] };
   for (const m of meds) {
     if (!m.name.trim()) continue;
@@ -699,7 +699,7 @@ function buildReminderPlanMessage(meds: Medication[]): string {
       byTime[t].push(m.dose ? `${m.name} (${m.dose})` : m.name);
     }
   }
-  return formatSchedule(byTime);
+  return byTime;
 }
 
 function MedsTab() {
@@ -840,18 +840,31 @@ function MedsTab() {
       await updatePrescriptionMeds(selectedId, finalMeds);
       setOcrMsg(null);
 
-      // Chỉ phân tích lịch nhắc cho đơn thuốc MỚI NHẤT — đơn cũ bỏ qua.
-      // Tạm thời chỉ gửi kết quả phân tích qua Telegram để test, chưa tự tạo lịch nhắc thật.
-      // Không await AI — chạy nền, không chặn thao tác Lưu, fallback về keyword-matching nếu lỗi.
+      // Chỉ đồng bộ lịch nhắc cho đơn thuốc MỚI NHẤT — đơn cũ bỏ qua.
+      // Xoá hết lịch nhắc cũ, tạo lại theo đơn mới nhất (đúng 3 buổi Sáng/Chiều/Tối).
+      // Chạy nền, không chặn thao tác Lưu — fallback về keyword-matching nếu gọi AI lỗi.
       const isNewest = prescriptions.every((p) => p.id === selectedId || p.createdAt <= (selected?.createdAt ?? 0));
       if (isNewest && finalMeds.length > 0) {
+        const uid = user.uid;
+        const rxId = selectedId;
         const rxDate = selected ? formatDateTime(selected.createdAt) : "";
-        classifyMedTimes(finalMeds.map((m) => ({ name: m.name, dose: m.dose }))).then((aiSchedule) => {
-          const plan = aiSchedule
-            ? formatSchedule({ "Sáng": aiSchedule["Sáng"] ?? [], "Chiều": aiSchedule["Chiều"] ?? [], "Tối": aiSchedule["Tối"] ?? [] })
-            : buildReminderPlanMessage(finalMeds);
-          const title = aiSchedule ? "💊 Lịch nhắc thuốc (test, AI 🤖)" : "💊 Lịch nhắc thuốc (test)";
-          notify(title, `Đơn ngày ${rxDate}\n\n${plan}`).catch(() => {});
+        classifyMedTimes(finalMeds.map((m) => ({ name: m.name, dose: m.dose }))).then(async (aiSchedule) => {
+          const schedule = aiSchedule
+            ? { "Sáng": aiSchedule["Sáng"] ?? [], "Chiều": aiSchedule["Chiều"] ?? [], "Tối": aiSchedule["Tối"] ?? [] }
+            : computeLocalSchedule(finalMeds);
+          try {
+            const oldSchedules = await getSchedulesOnce(uid);
+            await Promise.all(oldSchedules.map((s) => deleteSchedule(uid, s.id)));
+            const activeBuoi = REMINDER_KEYWORDS.filter((t) => schedule[t].length > 0);
+            await Promise.all(
+              activeBuoi.map((t) => addSchedule(uid, t, REMINDER_DEFAULT_HOUR[t], 0, rxId)),
+            );
+            const plan = formatSchedule(schedule);
+            const title = aiSchedule ? "💊 Đã cập nhật lịch nhắc thuốc (AI 🤖)" : "💊 Đã cập nhật lịch nhắc thuốc";
+            notify(title, `Đơn ngày ${rxDate}\n\n${plan}`).catch(() => {});
+          } catch (err) {
+            console.error("[syncReminders]", err);
+          }
         });
       }
     } catch (e) {

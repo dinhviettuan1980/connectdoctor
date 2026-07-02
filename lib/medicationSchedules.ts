@@ -1,6 +1,6 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp,
+  onSnapshot, query, orderBy, serverTimestamp, getDocs,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import {
@@ -31,6 +31,12 @@ export function subscribeToSchedules(
     (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() } as MedicationSchedule))),
     () => cb([]),
   );
+}
+
+/** One-shot fetch (không phải realtime) — dùng khi cần đọc rồi ghi lại ngay, ví dụ thay hết lịch nhắc cũ. */
+export async function getSchedulesOnce(uid: string): Promise<MedicationSchedule[]> {
+  const snap = await getDocs(query(col(uid), orderBy("createdAt", "asc")));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MedicationSchedule));
 }
 
 export async function addSchedule(
