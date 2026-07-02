@@ -5,7 +5,7 @@
 **Cập nhật lần cuối:** 2026-07-02
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
 (`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `bffd8ca` — feat: point connectdoctor at the new doctorapi backend, AI-classify meal times
+**HEAD:** `1069222` — feat(reminders): remove manual add button, schedules now auto-generate
 
 ## Đang làm gì
 
@@ -71,6 +71,16 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
     thành công ngay trên cùng IP. Đã sửa cả `doctorapi/telegram.js` VÀ `xsmbapi/telegram.js` dùng module
     `https` + `family: 4` thay vì `fetch()`. Verify: gọi `/notify` lặp lại nhiều lần đều `telegram:true`.
     Chi tiết đầy đủ ở `BUGS.md` — bài học: đừng tin 1 lần test thành công với lỗi mạng ngẫu nhiên.
+12. **Lịch nhắc thuốc giờ là thật, không còn chỉ "test qua Telegram"** — commit `b22968c`. Bấm "Lưu" trên
+    đơn thuốc mới nhất giờ: xoá hết `MedicationSchedule` cũ → tạo lại đúng các buổi Sáng/Chiều/Tối có
+    thuốc (giờ mặc định 7h/12h/19h, gắn `prescriptionId`) qua `addSchedule`/`deleteSchedule`
+    (`lib/medicationSchedules.ts`, đã tự lo cả việc đặt/huỷ local notification). Vẫn gửi Telegram xác
+    nhận song song (không còn ghi "(test)" trong tiêu đề nữa). Thêm `getSchedulesOnce()` cho việc đọc rồi
+    xoá hàng loạt.
+13. **Bỏ nút "+ Thêm giờ uống thuốc" thủ công** — commit `1069222`, theo yêu cầu user vì lịch nhắc giờ tự
+    sinh từ đơn thuốc (mục 12). Tab "Nhắc nhở" giờ chỉ còn Sửa (giờ/phút/bật-tắt) và Xoá cho lịch đã có,
+    không tạo mới thủ công được nữa.
+    **Cả 3 mục 12/13 chưa được user xác nhận đã test trên UI thật.**
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 

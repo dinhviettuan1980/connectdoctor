@@ -44,14 +44,11 @@
 
 ## Medium Priority
 
-- **Tự động tạo `MedicationSchedule` thật từ phân tích đơn thuốc (thay vì chỉ gửi Telegram test)**
-  Mô tả: khi lưu đơn thuốc mới nhất, app phân tích câu chữ liều dùng thành buổi Sáng/Chiều/Tối và gửi kết
-  quả qua Telegram để test — **chưa tự tạo lịch nhắc thật** (`addSchedule`/`lib/medicationSchedules.ts`).
-  **Cập nhật 2026-07-02:** bước phân loại đã đổi từ keyword-matching cục bộ sang gọi AI thật
-  (`doctorapi`'s `POST /classify-meds`, dùng Groq — xem `DECISIONS.md`), fallback về keyword nếu AI lỗi.
-  Khi kết quả phân tích ổn định, nối vào `addSchedule` để tự tạo/cập nhật 3 lịch nhắc Sáng/Chiều/Tối
-  thật cho bệnh nhân thay vì chỉ thông báo.
-  Trạng thái: chưa bắt đầu — đang ở giai đoạn test qua Telegram/email theo yêu cầu.
+- **Đơn thuốc rỗng (xoá hết thuốc rồi Lưu) không xoá lịch nhắc cũ**
+  Mô tả: `MedsTab.handleSaveAll` (commit `b22968c`) chỉ đồng bộ lại `MedicationSchedule` khi
+  `finalMeds.length > 0`. Nếu người dùng xoá hết thuốc trong đơn mới nhất rồi bấm Lưu, lịch nhắc cũ (từ
+  đơn trước đó) vẫn còn nguyên dù đơn hiện tại không còn thuốc nào — có thể gây nhắc nhở sai.
+  Trạng thái: chưa bắt đầu — edge case, chưa rõ mức độ ưu tiên từ user.
 
 - **Native Google/Facebook sign-in qua `expo-auth-session`**
   Mô tả: README ghi nhận web đã dùng `signInWithPopup`/redirect nhưng native (iOS/Android) social sign-in
