@@ -32,6 +32,15 @@ export function makeMedId(i = 0): string {
   return `${Date.now()}-${i}`;
 }
 
+/**
+ * Firestore từ chối field value `undefined` ở bất kỳ đâu trong dữ liệu ghi (kể cả lồng trong mảng).
+ * `category` là field optional hay bị set thành `undefined` (thuốc không có nhóm) — bỏ hẳn key thay vì
+ * giữ `undefined` để tránh lỗi "updateDoc() called with invalid data".
+ */
+function sanitizeMeds(meds: Medication[]): Medication[] {
+  return meds.map(({ category, ...rest }) => (category ? { ...rest, category } : rest) as Medication);
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -70,7 +79,7 @@ export async function createPrescription(
 ): Promise<string> {
   const now = Date.now();
   const ref = await addDoc(collection(db, "prescriptions"), {
-    patientUid, meds, note, images: [], createdAt: now, updatedAt: now,
+    patientUid, meds: sanitizeMeds(meds), note, images: [], createdAt: now, updatedAt: now,
   });
   return ref.id;
 }
@@ -80,7 +89,7 @@ export async function updatePrescriptionNote(id: string, note: string): Promise<
 }
 
 export async function updatePrescriptionMeds(id: string, meds: Medication[]): Promise<void> {
-  await updateDoc(doc(db, "prescriptions", id), { meds, updatedAt: Date.now() });
+  await updateDoc(doc(db, "prescriptions", id), { meds: sanitizeMeds(meds), updatedAt: Date.now() });
 }
 
 export async function addImageToPrescription(
