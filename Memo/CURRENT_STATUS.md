@@ -5,7 +5,7 @@
 **Cập nhật lần cuối:** 2026-07-02
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
 (`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `780090a` — feat(reminders): include medication names in the reminder notification/card
+**HEAD:** `ddfa5c9` — feat(prescriptions): remove separate OCR-upload entry point and in-modal delete button
 
 ## Đang làm gì
 
@@ -90,6 +90,11 @@ Chuỗi việc trong ngày 2026-07-02, tất cả đã commit, push, và deploy 
     qua card trong tab Nhắc nhở, không có push notification thật.
     **Cả mục 12/13/14 chưa được user xác nhận đã test trên UI thật** (đặc biệt mục 14 cần test trên máy
     thật/simulator native mới thấy nội dung push, không test được qua web).
+15. **Dọn 2 nút thừa ở tab Đơn thuốc** — commit `ddfa5c9`. Bỏ nút "🤖 Đọc đơn thuốc từ ảnh (AI)" (thừa vì
+    editor thủ công đã tự OCR khi thêm ảnh — xem mục redesign trước đó) và nút "Xoá đơn thuốc này" trong
+    modal chi tiết (thừa vì đã có link "Xoá" ở mỗi dòng trong danh sách, vẫn giữ nguyên). Route
+    `ocr/upload.tsx?kind=meds` không bị xoá khỏi codebase — vẫn còn dùng gián tiếp qua `kind=metrics` cho
+    tab Chỉ số.
 
 ## Đã hoàn thành gần đây (từ git log, mới → cũ)
 
