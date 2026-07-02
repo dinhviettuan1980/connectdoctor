@@ -29,6 +29,12 @@
   qua `expo-auth-session` cần kiểm tra lại độ hoàn thiện — chưa xác nhận đã xong 100%.
   Trạng thái: cần audit lại `lib/auth.ts`, `hooks/useGoogleSignIn.ts`, `hooks/useFacebookSignIn.ts`.
 
+- **Audit các site nginx khác trên VPS xem có thiếu `client_max_body_size` không**
+  Mô tả: đã sửa `api.tuandv.id.vn` (413 khi upload ảnh đơn thuốc >1MB, xem `BUGS.md` 2026-07-02) nhưng
+  chưa kiểm tra các site còn lại (`connectdoctor.tuandv.id.vn` chính nó, và site của project khác dùng
+  chung VPS) — nếu có luồng upload nào khác cũng có thể dính lỗi tương tự.
+  Trạng thái: chưa bắt đầu.
+
 - **OCR offline native (ML Kit) làm fallback**
   Mô tả: README đề xuất `@react-native-ml-kit/text-recognition` cho OCR offline khi không có mạng/API
   key. Hiện tại 100% phụ thuộc Groq vision (network call).

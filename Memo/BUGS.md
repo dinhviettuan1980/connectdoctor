@@ -59,6 +59,22 @@
 - **Bài học:** tính năng background location mới trên iOS luôn cần cập nhật `Info.plist`
   (`app.json` → `ios.infoPlist`), không tự động có.
 
+### Upload ảnh đơn thuốc bị 413 Request Entity Too Large (production)
+- **Ngày phát hiện & sửa:** 2026-07-02.
+- **Triệu chứng:** trên `connectdoctor.tuandv.id.vn/profile`, chọn ảnh đơn thuốc (~3MB) để upload báo lỗi,
+  network tab cho thấy `POST https://api.tuandv.id.vn/storage/upload` → `413 Request Entity Too Large`
+  (response HTML nhỏ, `Content-Type: text/html` → lỗi từ nginx, không phải app).
+- **Nguyên nhân:** server nginx (VPS `3.27.76.114`, xem `reference_build_server` trong memory cá nhân)
+  không set `client_max_body_size` cho site `api.tuandv.id.vn` (`/etc/nginx/sites-enabled/api.tuandv.id.vn`)
+  → mặc định nginx giới hạn 1MB, chặn trước khi tới app. App phía sau (`multer` trong
+  `~/xsmbapi/storage-router.js` trên cùng VPS — service upload dùng chung cho nhiều project, xem
+  `ARCHITECTURE.md` → "Hạ tầng production") **không** giới hạn kích thước.
+- **Fix:** thêm `client_max_body_size 20m;` vào server block 443 của
+  `/etc/nginx/sites-enabled/api.tuandv.id.vn`, `nginx -t` rồi `systemctl reload nginx`. Đã backup file gốc
+  thành `api.tuandv.id.vn.bak-20260702` trước khi sửa. Verify bằng `curl -F file=@3mb.bin` → `200`.
+- **Bài học:** đây là 1 trong nhiều site nginx trên VPS dùng chung — chưa audit các site khác
+  (kinhdich, xsmbfrontend, ...) xem có cùng thiếu `client_max_body_size` không. Xem `TODO.md`.
+
 ## Workaround đang áp dụng (chưa phải fix triệt để)
 
 - **`EXPO_PUBLIC_*` lộ API key phía client** — chấp nhận được cho dev, chưa fix triệt để (xem `TODO.md`

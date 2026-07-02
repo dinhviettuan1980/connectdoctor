@@ -172,11 +172,36 @@ addRepo({ name, url, branch, needReview }) → Promise<repoId>
 
 - Dev: `npm run web|ios|android`, `npm start` (Expo Go QR).
 - `postinstall` chạy `scripts/patch-worklets.js` (patch cho react-native-reanimated worklets).
-- Web production: `npm run build:web` → static ra `dist/` → deploy Vercel/Netlify.
-- Native production: `eas build -p ios|android` (cấu hình trong `eas.json`).
+- Web production: **không dùng Vercel/Netlify như README gợi ý ban đầu** — thực tế build + serve trên VPS
+  riêng qua `pm2` (xem "Hạ tầng production" bên dưới). README lỗi thời ở điểm này.
+- Native production: `eas build -p ios|android` (cấu hình trong `eas.json`) — **chưa từng chạy thật**,
+  `eas-cli` chưa cài/đăng nhập trên máy dev tính đến 2026-07-02.
 - Cloud Functions: build TypeScript trong `functions/` (`tsc` → `functions/lib/`), deploy qua
   `firebase.json` / `firebase deploy --only functions`.
 - Firestore/Storage rules: `firestore.rules`, `storage.rules`, index config `firestore.indexes.json`.
+
+## Hạ tầng production (web)
+
+Web build **không** deploy lên Vercel/Netlify — chạy trên 1 VPS Ubuntu dùng chung cho nhiều project của
+chủ dự án (không chỉ ConnectDoctor). Chi tiết SSH access lưu trong memory cá nhân của Claude (không lưu ở
+đây vì đây là repo — tránh commit thông tin hạ tầng nhạy cảm).
+
+```
+connectdoctor.tuandv.id.vn  ──nginx proxy_pass──>  127.0.0.1:3002 (pm2 process "connectdoctor")
+api.tuandv.id.vn            ──nginx proxy_pass──>  127.0.0.1:8001 (pm2 process "xsmbapi")
+```
+
+- Deploy script trên VPS: `~/deploy-connectdoctor.sh` — `git reset --hard origin/master` → `npm install`
+  → `npx expo export --platform web` (ra `dist/`) → `pm2 restart connectdoctor`. Chạy thủ công qua SSH khi
+  cần build/deploy bản mới (không có CI/CD tự động — không có GitHub Actions/webhook trigger deploy).
+- **`api.tuandv.id.vn/storage/*` (upload ảnh — đơn thuốc, chỉ số, avatar) không phải Cloud Function hay
+  Firebase Storage trực tiếp** — là 1 Express server (`multer`, memory storage) chạy trong pm2 process
+  `xsmbapi`, tức **service lưu trữ dùng chung giữa ConnectDoctor và project khác (xsmbapi)** của cùng chủ
+  dự án. `EXPO_PUBLIC_STORAGE_URL` trong `.env` trỏ vào server này. Không giới hạn kích thước file ở tầng
+  app; giới hạn (nếu có) đến từ nginx `client_max_body_size` phía trước — xem `BUGS.md` (bug 413 ngày
+  2026-07-02) để biết site nào đã set, site nào có thể còn thiếu.
+- Mỗi site trên VPS có 1 file nginx riêng trong `/etc/nginx/sites-enabled/`, quản lý SSL qua Certbot. Sửa
+  nginx cần `sudo`, luôn `nginx -t` trước khi `systemctl reload nginx`.
 
 ## Dependency graph (tầng cao)
 
