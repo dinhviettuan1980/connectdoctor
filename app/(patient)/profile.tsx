@@ -1521,6 +1521,12 @@ function reminderTime(hour: number, minute: number) {
   return `${pad2(rHour)}:${pad2(rMin)}`;
 }
 
+// Giờ uống thuốc chỉ có 3 buổi cố định — người dùng chọn buổi rồi nhập giờ cụ thể, không gõ tay tên gợi nhớ.
+const REMINDER_KEYWORDS = ["Sáng", "Chiều", "Tối"] as const;
+const REMINDER_DEFAULT_HOUR: Record<(typeof REMINDER_KEYWORDS)[number], number> = {
+  "Sáng": 7, "Chiều": 12, "Tối": 19,
+};
+
 function RemindersTab() {
   const user = useAuthStore((s) => s.user);
   const [schedules, setSchedules] = useState<MedicationSchedule[]>([]);
@@ -1528,7 +1534,7 @@ function RemindersTab() {
   const [permGranted, setPermGranted] = useState<boolean | null>(null);
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [draftLabel, setDraftLabel] = useState("");
+  const [draftLabel, setDraftLabel] = useState<string>(REMINDER_KEYWORDS[0]);
   const [draftHour, setDraftHour] = useState(8);
   const [draftMinute, setDraftMinute] = useState(0);
   const [draftPrescriptionId, setDraftPrescriptionId] = useState<string | null>(null);
@@ -1546,7 +1552,8 @@ function RemindersTab() {
   }, [user?.uid]);
 
   const openAdd = () => {
-    setDraftLabel(""); setDraftHour(8); setDraftMinute(0);
+    const keyword = REMINDER_KEYWORDS.find((k) => !schedules.some((s) => s.label === k)) ?? REMINDER_KEYWORDS[0];
+    setDraftLabel(keyword); setDraftHour(REMINDER_DEFAULT_HOUR[keyword]); setDraftMinute(0);
     setDraftPrescriptionId(prescriptions[0]?.id ?? null);
     setEditId(null); setAdding(true);
   };
@@ -1694,13 +1701,18 @@ function RemindersTab() {
             </View>
 
             <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
-              <Input
-                label="Tên gợi nhớ"
-                value={draftLabel}
-                onChangeText={setDraftLabel}
-                placeholder="Vd: Uống thuốc sáng, Uống thuốc tối…"
-                returnKeyType="done"
-              />
+              <View className="gap-1.5">
+                <Text className="text-[10px] uppercase tracking-wider text-ink-3">Buổi</Text>
+                <Segmented
+                  value={draftLabel}
+                  options={REMINDER_KEYWORDS.map((k) => ({ value: k, label: k }))}
+                  onChange={(v) => {
+                    setDraftLabel(v);
+                    setDraftHour(REMINDER_DEFAULT_HOUR[v as (typeof REMINDER_KEYWORDS)[number]]);
+                    setDraftMinute(0);
+                  }}
+                />
+              </View>
 
               <View className="gap-1.5">
                 <Text className="text-[10px] uppercase tracking-wider text-ink-3">Giờ</Text>
