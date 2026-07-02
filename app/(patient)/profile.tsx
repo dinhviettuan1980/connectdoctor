@@ -21,6 +21,8 @@ import { healthService, type HeartRateSample } from "@/lib/health";
 import {
   createPrescription,
   updatePrescriptionNote,
+  updatePrescriptionMeds,
+  makeMedId,
   addImageToPrescription,
   removeImageFromPrescription,
   deletePrescription,
@@ -37,7 +39,7 @@ import {
 } from "@/lib/medicationSchedules";
 import { requestNotificationPermission } from "@/lib/notifications";
 import { scanForHealthDevices, type HealthDevice } from "@/lib/ble";
-import type { EmergencyContact, MetricEntry, MetricType, PatientProfile } from "@/lib/types";
+import type { EmergencyContact, Medication, MetricEntry, MetricType, PatientProfile } from "@/lib/types";
 import { EmergencyContacts } from "@/components/EmergencyContacts";
 import { FamilyGroups } from "@/components/FamilyGroups";
 import HomeAddressPicker from "@/components/HomeAddressPicker";
@@ -772,10 +774,14 @@ function MedsTab() {
             </View>
           </View>
 
-          {/* Note preview */}
-          {!!p.note && (
+          {/* Meds preview (cấu trúc) — fallback về note cho đơn cũ */}
+          {p.meds.length > 0 ? (
+            <Text className="text-[11px] text-ink-3 mb-2" numberOfLines={2}>
+              💊 {p.meds.length} thuốc: {p.meds.map((m) => m.name).filter(Boolean).join(", ")}
+            </Text>
+          ) : !!p.note ? (
             <Text className="text-[11px] text-ink-3 mb-2" numberOfLines={1}>{p.note}</Text>
-          )}
+          ) : null}
 
           {/* Photo thumbnails preview (max 4) */}
           {p.images.length > 0 ? (
@@ -829,7 +835,14 @@ function MedsTab() {
                 </Pressable>
               </View>
 
-              {/* Note editor */}
+              {/* Meds editor (cấu trúc từng thuốc) */}
+              <MedsEditor
+                key={`meds-${selected?.id}`}
+                initialMeds={selected?.meds ?? []}
+                onSave={(meds) => selected && updatePrescriptionMeds(selected.id, meds)}
+              />
+
+              {/* Note editor (ghi chú tự do) */}
               <NoteEditor
                 key={selected?.id}
                 initialNote={selected?.note ?? ""}
@@ -944,6 +957,67 @@ function NoteEditor({ initialNote, onSave }: { initialNote: string; onSave: (v: 
       {dirty && (
         <Pressable onPress={() => onSave(note)} className="self-end">
           <Text className="text-xs text-accent-ink">Lưu ghi chú</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+// Controlled structured-meds editor — sửa từng thuốc (tên / liều / nhóm), lưu cả mảng.
+function MedsEditor({ initialMeds, onSave }: { initialMeds: Medication[]; onSave: (v: Medication[]) => void }) {
+  const [meds, setMeds] = useState<Medication[]>(initialMeds);
+  const dirty = JSON.stringify(meds) !== JSON.stringify(initialMeds);
+
+  const upd = (i: number, k: "name" | "dose" | "category", v: string) =>
+    setMeds((p) => p.map((m, idx) => (idx === i ? { ...m, [k]: v } : m)));
+  const del = (i: number) => setMeds((p) => p.filter((_, idx) => idx !== i));
+  const add = () =>
+    setMeds((p) => [
+      ...p,
+      { id: makeMedId(p.length), name: "", dose: "", category: undefined, source: "manual", createdAt: Date.now() },
+    ]);
+
+  const inputCls = {
+    borderWidth: 1, borderColor: "#c8c8c2", borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6, fontSize: 13, color: "#1a1a1a",
+  } as const;
+
+  return (
+    <View className="gap-2">
+      <Text className="text-[10px] uppercase tracking-wider text-ink-3">Thuốc ({meds.length})</Text>
+      {meds.map((m, i) => (
+        <Card key={m.id} padding="md">
+          <View className="gap-1.5">
+            <View className="flex-row items-center gap-2">
+              <TextInput
+                style={[inputCls, { flex: 1, fontWeight: "700" }]}
+                placeholder="Tên thuốc + hàm lượng" placeholderTextColor="#b5b5b5"
+                value={m.name} onChangeText={(v) => upd(i, "name", v)}
+              />
+              <Pressable onPress={() => del(i)} hitSlop={8}>
+                <Text className="text-danger text-lg">✕</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              style={inputCls} placeholder="Cách dùng / liều" placeholderTextColor="#b5b5b5"
+              value={m.dose} onChangeText={(v) => upd(i, "dose", v)}
+            />
+            <TextInput
+              style={inputCls} placeholder="Nhóm (Huyết áp, Xương khớp…)" placeholderTextColor="#b5b5b5"
+              value={m.category ?? ""} onChangeText={(v) => upd(i, "category", v)}
+            />
+          </View>
+        </Card>
+      ))}
+      <Pressable onPress={add} className="self-start">
+        <Text className="text-xs text-accent-ink">＋ Thêm thuốc</Text>
+      </Pressable>
+      {dirty && (
+        <Pressable
+          onPress={() => onSave(meds.filter((m) => m.name.trim()).map((m) => ({ ...m, category: m.category?.trim() || undefined })))}
+          className="self-end"
+        >
+          <Text className="text-xs text-accent-ink">Lưu danh sách thuốc</Text>
         </Pressable>
       )}
     </View>

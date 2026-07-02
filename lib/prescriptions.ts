@@ -3,6 +3,7 @@ import {
   query, where, onSnapshot, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import type { Medication } from "./types";
 
 const STORAGE_URL = process.env.EXPO_PUBLIC_STORAGE_URL ?? "https://api.tuandv.id.vn/storage";
 
@@ -18,10 +19,18 @@ export interface PrescriptionImage {
 export interface Prescription {
   id: string;
   patientUid: string;
+  /** Cấu trúc từng thuốc — nguồn dữ liệu chính (theo dõi liều / nhắc uống). */
+  meds: Medication[];
+  /** Ghi chú tự do: tên bác sĩ, phòng khám, lý do tái khám… (KHÔNG còn dùng để chứa danh sách thuốc). */
   note: string;
   images: PrescriptionImage[];
   createdAt: number; // used as the display name / title
   updatedAt: number;
+}
+
+/** Sinh id cục bộ cho thuốc nhúng trong 1 đơn (đồng bộ trong cùng lần lưu). */
+export function makeMedId(i = 0): string {
+  return `${Date.now()}-${i}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,16 +64,24 @@ async function deleteFromStorage(storageKey: string): Promise<void> {
 // CRUD
 // ---------------------------------------------------------------------------
 
-export async function createPrescription(patientUid: string): Promise<string> {
+export async function createPrescription(
+  patientUid: string,
+  meds: Medication[] = [],
+  note = ""
+): Promise<string> {
   const now = Date.now();
   const ref = await addDoc(collection(db, "prescriptions"), {
-    patientUid, note: "", images: [], createdAt: now, updatedAt: now,
+    patientUid, meds, note, images: [], createdAt: now, updatedAt: now,
   });
   return ref.id;
 }
 
 export async function updatePrescriptionNote(id: string, note: string): Promise<void> {
   await updateDoc(doc(db, "prescriptions", id), { note, updatedAt: Date.now() });
+}
+
+export async function updatePrescriptionMeds(id: string, meds: Medication[]): Promise<void> {
+  await updateDoc(doc(db, "prescriptions", id), { meds, updatedAt: Date.now() });
 }
 
 export async function addImageToPrescription(
@@ -111,6 +128,7 @@ export function subscribeToPrescriptions(
           return {
             id: d.id,
             ...data,
+            meds: Array.isArray(data.meds) ? data.meds : [],
             images: Array.isArray(data.images) ? data.images : [],
           } as Prescription;
         })

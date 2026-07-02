@@ -8,7 +8,7 @@ import { Chip } from "@/components/ui/Chip";
 import { Button } from "@/components/ui/Button";
 import { extractMedsFromImage, extractMetricsFromImage } from "@/lib/ocr";
 import { useAuthStore } from "@/hooks/useAuth";
-import { createPrescription, addImageToPrescription, updatePrescriptionNote } from "@/lib/prescriptions";
+import { createPrescription, addImageToPrescription, makeMedId } from "@/lib/prescriptions";
 import { addMetric } from "@/lib/metrics";
 import type { Medication, MetricEntry, MetricType } from "@/lib/types";
 
@@ -56,12 +56,17 @@ export default function OcrReview() {
       if (isMeds) {
         const valid = meds.filter((m) => (m.name || "").trim());
         if (valid.length === 0) { Alert.alert("Trống", "Chưa có thuốc nào để lưu."); setSaving(false); return; }
-        const id = await createPrescription(user.uid);
+        const now = Date.now();
+        const structured: Medication[] = valid.map((m, i) => ({
+          id: makeMedId(i),
+          name: (m.name || "").trim(),
+          dose: (m.dose || "").trim(),
+          category: (m.category || "").trim() || undefined,
+          source: "ocr",
+          createdAt: now,
+        }));
+        const id = await createPrescription(user.uid, structured);
         try { await addImageToPrescription(id, user.uid, uri); } catch { /* ảnh lỗi không chặn lưu */ }
-        const note = valid
-          .map((m) => `• ${m.name}${m.dose ? ` — ${m.dose}` : ""}${m.category ? ` (${m.category})` : ""}`)
-          .join("\n");
-        await updatePrescriptionNote(id, note);
         router.replace({ pathname: "/(patient)/ocr/confirm", params: { kind, count: String(valid.length) } });
       } else {
         const valid = metrics.filter((m) => (m.label || "").trim());
