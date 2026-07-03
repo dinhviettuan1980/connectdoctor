@@ -2,10 +2,24 @@
 
 > Trạng thái thực tế mới nhất. Cập nhật file này sau mỗi task/milestone lớn.
 
-**Cập nhật lần cuối:** 2026-07-02
+**Cập nhật lần cuối:** 2026-07-03
 **Branch:** `master`, đồng bộ với `origin/master`, đã deploy lên production
-(`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production").
-**HEAD:** `ddfa5c9` — feat(prescriptions): remove separate OCR-upload entry point and in-modal delete button
+(`connectdoctor.tuandv.id.vn`, xem `ARCHITECTURE.md` → "Hạ tầng production"). HEAD của `connectdoctor`
+không đổi so với hôm qua (`ddfa5c9`) — thay đổi hôm nay nằm ở backend riêng `doctorapi` (repo khác), xem
+bên dưới.
+
+## Việc mới nhất (2026-07-03): migrate `doctorapi` sang NestJS + Fastify (Phase 1/3)
+
+- Theo kế hoạch tách 3 backend (`doctorapi`/`kinhdichapi`/`xsmbapi`) sang NestJS — xem `DECISIONS.md`.
+- **`doctorapi` đã viết lại xong bằng NestJS + Fastify + TypeScript, đã cutover production.** Cùng
+  contract/route/env vars như bản Express cũ (đã verify từng endpoint qua `curl` cả local lẫn qua domain
+  thật `doctorapi.tuandv.id.vn` sau khi đổi nginx) — `connectdoctor` **không cần đổi gì** phía app.
+  - pm2 process mới `doctorapi-nest` (port 8032) — nginx đã trỏ hẳn sang đây.
+  - pm2 process cũ `doctorapi` (port 8022, Express) **vẫn giữ chạy** làm rollback window ~1 tuần, không
+    nhận traffic nữa (đừng ngạc nhiên nếu thấy 2 process cùng tên gần giống nhau trên `pm2 list`).
+  - Chi tiết kiến trúc mới ở `ARCHITECTURE.md` → mục backend `doctorapi`.
+- **Chưa làm**: Phase 2 (`kinhdichapi`) và Phase 3 (`xsmbapi`) — chờ user xác nhận tiếp sau khi Phase 1
+  chạy ổn định.
 
 ## Đang làm gì
 

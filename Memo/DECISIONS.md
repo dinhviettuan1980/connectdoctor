@@ -4,6 +4,38 @@
 
 ---
 
+### 2026-07-03 — Migrate 3 backend (doctorapi/kinhdichapi/xsmbapi) từ Express sang NestJS + Fastify + TypeScript
+
+**Quyết định:** viết lại cả 3 backend Express/JS thuần (`doctorapi`, `kinhdichapi`, `xsmbapi` — cả 3 đều
+là project riêng của user, không nằm trong repo `connectdoctor`) sang NestJS dùng Fastify làm HTTP
+adapter, viết bằng TypeScript. Thứ tự: `doctorapi` (nhỏ nhất, không state/DB) → `kinhdichapi` (có
+DB+auth+SSE) → `xsmbapi` (lớn nhất, có bot Zalo session dài hạn + cron + crawler). Kế hoạch đầy đủ lưu ở
+`/Users/tuandv/.claude/plans/swirling-squishing-elephant.md`.
+
+**Lý do:** user chủ động muốn học NestJS/Fastify, tự nhận "hơi to" so với quy mô hiện tại nhưng chấp
+nhận đánh đổi effort để học công nghệ mới — không phải nhu cầu kỹ thuật cấp bách.
+
+**Quyết định kèm theo:**
+- Không đổi sang ORM (TypeORM/Prisma) cho phần SQLite ở kinhdichapi/xsmbapi — bọc raw SQL hiện có trong
+  1 `DatabaseService`, tránh viết lại hàng chục query chỉ vì đổi framework.
+- `xsmbapi` migrate toàn bộ 1 lần kể cả bot Zalo (rủi ro cao hơn, do user chọn thay vì migrate dần theo
+  domain).
+- Bỏ hẳn `/storage` + `/notify` khỏi bản NestJS của `xsmbapi` — đã là duplicate của `doctorapi`; giữ 1
+  tiến trình Express cũ tối giản chạy song song chỉ để phục vụ URL cũ.
+- Deploy/cutover: build port mới → chạy song song bản cũ qua pm2 → verify từng route bằng `curl` → đổi
+  nginx `proxy_pass` → giữ bản cũ ~1 tuần để rollback.
+
+**Trade-offs:** effort lớn hơn nhiều so với lợi ích kỹ thuật thuần tuý (3 service hiện tại chạy ổn định);
+rủi ro thật sự (đặc biệt `xsmbapi` — service đang chạy live, có bot nhắn tin thật + crawl + đặt cược mô
+phỏng). Đổi lại: kiến trúc rõ ràng hơn (module/DI thay vì 1 file `index.js` hàng nghìn dòng), type-safety,
+và user đạt được mục tiêu học công nghệ mới.
+
+**Tiến độ (cập nhật liên tục — xem `CURRENT_STATUS.md` để biết trạng thái mới nhất):**
+- ✅ Phase 1 (`doctorapi`) xong 2026-07-03 — xem `ARCHITECTURE.md` → mục backend `doctorapi`.
+- ⏳ Phase 2 (`kinhdichapi`), Phase 3 (`xsmbapi`) — chưa bắt đầu, chờ xác nhận sau khi Phase 1 ổn định.
+
+---
+
 ### 2026-07-02 — Tách backend ConnectDoctor ra repo/service riêng (`doctorapi`)
 
 **Quyết định:** upload file (đơn thuốc, avatar, audio chat, audio knowledge) + `/notify`

@@ -196,20 +196,33 @@ api.tuandv.id.vn            ──nginx proxy_pass──>  127.0.0.1:8001 (pm2 "
   → `npx expo export --platform web` (ra `dist/`) → `pm2 restart connectdoctor`. Chạy thủ công qua SSH khi
   cần build/deploy bản mới (không có CI/CD tự động — không có GitHub Actions/webhook trigger deploy).
 - **Backend riêng `doctorapi`** (repo `dinhviettuan1980/doctorapi`, tách khỏi `xsmbapi` ngày 2026-07-02 —
-  xem `DECISIONS.md`): Express app nhỏ, gồm:
+  xem `DECISIONS.md`). **Viết lại bằng NestJS + Fastify + TypeScript ngày 2026-07-03** (từ bản Express/JS
+  ban đầu — Phase 1 của kế hoạch migrate cả 3 backend sang NestJS, xem `DECISIONS.md`). Gồm:
   - `POST /storage/upload`, `GET /storage/files/*`, `DELETE /storage/files` — upload/serve/xoá file
     (đơn thuốc, avatar, audio chat, audio "kiến thức sức khoẻ"). Lưu đĩa cục bộ trên VPS
     (`~/doctorapi/storage/`, `~/doctorapi/knowledge/`), không phải Cloud Function/Firebase Storage.
-  - `POST /notify` — gửi email (Resend) + Telegram, gate bằng header `x-notify-secret`.
+    Serve file qua **2 lần đăng ký `@fastify/static` riêng biệt** (1 cho storage dir, 1 cho knowledge
+    dir) — 2 route tree độc lập, không phải fallthrough hack như bản Express cũ.
+  - `POST /notify` — gửi email (Resend) + Telegram, gate bằng header `x-notify-secret`. TelegramService
+    dùng module `https` built-in + `family: 4` ép cứng (KHÔNG dùng `fetch()`/HttpModule) — xem bug IPv6
+    ở `BUGS.md`, đây là lý do kỹ thuật cụ thể, đừng đổi lại mà không test kỹ.
   - `POST /classify-meds` — phân loại thuốc vào buổi Sáng/Chiều/Tối bằng Groq (`llama-3.1-8b-instant`),
-    dùng cho tính năng lịch nhắc thuốc test qua Telegram (xem `app/(patient)/profile.tsx` →
-    `classifyMedTimes`). Cùng cơ chế gate bằng `x-notify-secret`.
+    dùng cho tính năng lịch nhắc thuốc (xem `app/(patient)/profile.tsx` → `classifyMedTimes`). Cùng cơ
+    chế gate bằng `x-notify-secret`.
   - `EXPO_PUBLIC_STORAGE_URL` và `API_BASE` trong `lib/notify.ts` đều trỏ vào
     `https://doctorapi.tuandv.id.vn`.
+  - Code local ở `/Users/tuandv/doctorapi` (`src/` TypeScript, build ra `dist/` bằng `nest build`).
   - Deploy: **không qua `git pull` trên server** — repo `doctorapi` là private và server (VPS) chưa có
-    credential GitHub, nên code được `scp` trực tiếp lên `~/doctorapi` thay vì deploy script tự động. Cần
-    nhớ: sửa code `doctorapi` cục bộ ở `/Users/tuandv/doctorapi` → commit/push (đã có quyền qua GitHub
-    account `tuandv80`, thêm làm collaborator) → `scp` file đã đổi lên server → `pm2 restart doctorapi`.
+    credential GitHub, nên code được `scp` trực tiếp lên `~/doctorapi-nest` (thư mục riêng, KHÔNG phải
+    `~/doctorapi` — đó là bản Express cũ giữ lại) thay vì deploy script tự động. Quy trình: sửa code local
+    → commit/push (đã có quyền qua GitHub account `tuandv80`, thêm làm collaborator) → tar + scp source
+    (không kèm `node_modules`/`dist`) lên `~/doctorapi-nest` → `npm install && npx nest build` trên server
+    → `pm2 restart doctorapi-nest`.
+  - pm2 process `doctorapi-nest` chạy port **8032**; process Express cũ `doctorapi` (port 8022) **vẫn giữ
+    chạy** làm rollback window (~1 tuần theo kế hoạch) — nginx đã trỏ hẳn sang 8032. `.env` của
+    `doctorapi-nest` trỏ `STORAGE_UPLOAD_DIR`/`KNOWLEDGE_DIR` về ĐÚNG path cũ
+    (`/home/ubuntu/doctorapi/storage`, `/home/ubuntu/doctorapi/knowledge`) — 2 process cùng đọc/ghi
+    chung dữ liệu, không tách bản sao riêng.
 - **`api.tuandv.id.vn/storage/*` (xsmbapi, legacy) vẫn đang chạy nguyên, KHÔNG bị xoá/tắt** — vì các bản
   ghi Firestore cũ (`PrescriptionImage.url`, avatar, audio chat từ trước 2026-07-02) có URL tuyệt đối
   trỏ thẳng vào domain này, cần domain này tiếp tục hoạt động để không vỡ link cũ. Chỉ có upload MỚI mới

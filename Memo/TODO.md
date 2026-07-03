@@ -4,6 +4,20 @@
 
 ## High Priority
 
+- **Dọn dẹp sau rollback window của `doctorapi` NestJS migration**
+  Mô tả: `doctorapi-nest` (NestJS, port 8032) đã cutover production 2026-07-03. pm2 process cũ `doctorapi`
+  (Express, port 8022, thư mục `~/doctorapi`) vẫn giữ chạy làm rollback ~1 tuần theo kế hoạch (xem
+  `DECISIONS.md`). Sau khi xác nhận ổn định (~2026-07-10), cần: `pm2 delete doctorapi`, xoá thư mục
+  `~/doctorapi` cũ trên server (KHÔNG xoá `~/doctorapi/storage`/`~/doctorapi/knowledge` — đó là data thật
+  đang được `doctorapi-nest` dùng chung, chỉ xoá code Express cũ).
+  Trạng thái: chờ hết thời gian rollback window.
+
+- **Tiếp tục Phase 2 (`kinhdichapi`) và Phase 3 (`xsmbapi`) của kế hoạch migrate NestJS**
+  Mô tả: Phase 1 (`doctorapi`) đã xong. Kế hoạch đầy đủ ở
+  `/Users/tuandv/.claude/plans/swirling-squishing-elephant.md` — chờ user xác nhận muốn tiếp tục hay dừng
+  ở Phase 1.
+  Trạng thái: chưa bắt đầu.
+
 - **Setup credential để server tự `git pull` được cho `xsmbapi` VÀ `doctorapi` (2 repo private)**
   Mô tả: server (`3.27.76.114`) không có credential GitHub (PAT/deploy key) để `git pull` qua HTTPS cho
   repo private — `~/deploy-xsmbapi.sh` và tương lai `deploy-doctorapi.sh` sẽ luôn lỗi
