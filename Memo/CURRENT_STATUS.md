@@ -8,18 +8,28 @@
 không đổi so với hôm qua (`ddfa5c9`) — thay đổi hôm nay nằm ở backend riêng `doctorapi` (repo khác), xem
 bên dưới.
 
-## Việc mới nhất (2026-07-03): migrate `doctorapi` sang NestJS + Fastify (Phase 1/3)
+## Việc mới nhất (2026-07-03): migrate CẢ 3 backend (`doctorapi`/`kinhdichapi`/`xsmbapi`) sang NestJS + Fastify — XONG CẢ 3, ĐÃ HỢP NHẤT HOÀN TOÀN
 
-- Theo kế hoạch tách 3 backend (`doctorapi`/`kinhdichapi`/`xsmbapi`) sang NestJS — xem `DECISIONS.md`.
-- **`doctorapi` đã viết lại xong bằng NestJS + Fastify + TypeScript, đã cutover production.** Cùng
-  contract/route/env vars như bản Express cũ (đã verify từng endpoint qua `curl` cả local lẫn qua domain
-  thật `doctorapi.tuandv.id.vn` sau khi đổi nginx) — `connectdoctor` **không cần đổi gì** phía app.
-  - pm2 process mới `doctorapi-nest` (port 8032) — nginx đã trỏ hẳn sang đây.
-  - pm2 process cũ `doctorapi` (port 8022, Express) **vẫn giữ chạy** làm rollback window ~1 tuần, không
-    nhận traffic nữa (đừng ngạc nhiên nếu thấy 2 process cùng tên gần giống nhau trên `pm2 list`).
-  - Chi tiết kiến trúc mới ở `ARCHITECTURE.md` → mục backend `doctorapi`.
-- **Chưa làm**: Phase 2 (`kinhdichapi`) và Phase 3 (`xsmbapi`) — chờ user xác nhận tiếp sau khi Phase 1
-  chạy ổn định.
+- Theo kế hoạch tách 3 backend sang NestJS — xem `DECISIONS.md` để biết đầy đủ quyết định/trade-offs/bug
+  gặp phải. `connectdoctor` **không cần đổi gì** phía app cho cả 3 (cùng contract/route/env vars, đã
+  verify `diff`-parity từng route với bản cũ trước khi cutover).
+- **Cả 3 backend giờ có cấu trúc ĐỒNG NHẤT** — mỗi backend là 1 repo/thư mục duy nhất, 100% NestJS,
+  KHÔNG còn bản Express nào chạy ở đâu trong hệ thống (đã xoá hết cùng ngày, xem mục "Hợp nhất hoàn
+  toàn" trong `DECISIONS.md` — user xác nhận đây là dự án học tập cá nhân nên không cần cửa sổ
+  rollback 1 tuần như dự kiến ban đầu):
+  - **`doctorapi`** (port 8032) — nginx `doctorapi.tuandv.id.vn` trỏ thẳng.
+  - **`kinhdichapi`** (port 8033) — nginx `kinhdich.tuandv.id.vn/kinhdich` + `kinhdichapi.tuandv.id.vn`.
+  - **`xsmbapi`** (port 8034) — nginx `api.tuandv.id.vn` trỏ thẳng 1 `location /` duy nhất (đã gộp
+    `/storage`+`/notify` vào cùng tiến trình, không path-split sang tiến trình Express riêng nữa).
+    Bot Zalo chạy trong tiến trình này, session dùng chung `cred.json` không cần QR lại.
+  - `pm2 list` trên server giờ chỉ còn đúng 3 tên `doctorapi`/`kinhdichapi`/`xsmbapi` — không hậu tố
+    `-nest`, không tiến trình Express nào còn sống.
+- Gặp + sửa 2 bug thật trong lúc cutover Phase 3 (thứ tự init module Nest, và bug nginx
+  `sites-enabled` là file thường không phải symlink khiến sửa config vô tác dụng) — chi tiết đầy đủ ở
+  `DECISIONS.md`.
+- **Việc còn lại (không gấp):** theo dõi cron chu kỳ đầu trên `xsmbapi` (đánh cược 17h/19h, tổng kết
+  quỹ 8h, health-daily 23h30); cân nhắc rotate secret trong `.env` của `xsmbapi` (từng bị track trong
+  git, đã gỡ track nhưng lịch sử cũ vẫn còn).
 
 ## Đang làm gì
 

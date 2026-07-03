@@ -30,9 +30,74 @@ rủi ro thật sự (đặc biệt `xsmbapi` — service đang chạy live, có
 phỏng). Đổi lại: kiến trúc rõ ràng hơn (module/DI thay vì 1 file `index.js` hàng nghìn dòng), type-safety,
 và user đạt được mục tiêu học công nghệ mới.
 
-**Tiến độ (cập nhật liên tục — xem `CURRENT_STATUS.md` để biết trạng thái mới nhất):**
-- ✅ Phase 1 (`doctorapi`) xong 2026-07-03 — xem `ARCHITECTURE.md` → mục backend `doctorapi`.
-- ⏳ Phase 2 (`kinhdichapi`), Phase 3 (`xsmbapi`) — chưa bắt đầu, chờ xác nhận sau khi Phase 1 ổn định.
+**Tiến độ — CẢ 3 PHASE ĐÃ XONG, ĐÃ CUTOVER PRODUCTION (2026-07-03):**
+- ✅ Phase 1 (`doctorapi`) — port 8032, cutover xong. Xem `ARCHITECTURE.md` → mục backend `doctorapi`.
+- ✅ Phase 2 (`kinhdichapi`) — port 8033, cutover xong. Xem `ARCHITECTURE.md` → mục backend `kinhdichapi`.
+- ✅ Phase 3 (`xsmbapi`) — port 8034, cutover xong (repo mới `xsmbapi-nest`, KHÔNG viết đè lên `xsmbapi`
+  cũ như 2 phase trước — xem lý do trong "Trade-offs" bên dưới). Xem `ARCHITECTURE.md` → mục `xsmbapi`.
+
+**Kết quả thực tế Phase 3 (rủi ro cao nhất — bot Zalo session thật):**
+- Đọc hết `index.js` (2995 dòng) + `bot.js` (777 dòng) trước khi viết code, phát hiện + chủ động BỎ
+  dead code đã tồn tại từ lâu: `/api/specials/2-months` (cú pháp MySQL chạy trên driver sqlite, luôn lỗi
+  500, không ai gọi được), `alreadySentToday`/`markSentToday`/`SCHEDULES_FILE` trong `bot.js` (định nghĩa
+  nhưng không dùng), dependency `puppeteer` thừa (code thực tế chỉ dùng axios+cheerio).
+- Genericize betting-sim (sim/sim2/sim4) thành 1 `BettingSimService` dùng chung qua base controller
+  abstract có decorator — trước đó là 3 khối code CRUD copy-paste giống hệt nhau trong `index.js`.
+- `/chat` và `/classify-two-digit` trước đây tự gọi HTTP vào chính server (`axios.get(BASE_URL+...)`) —
+  đổi thành gọi thẳng service cùng process (nhanh hơn, không phụ thuộc server tự reachable).
+- **Xử lý rủi ro song song bot Zalo:** session zca-js (`cred.json`) không thể sống ở 2 tiến trình cùng
+  lúc → dùng `ZALO_ENABLED=false` ở bản Nest suốt giai đoạn dual-run, chỉ bật sau khi đã `pm2 stop` hẳn
+  bản Express cũ (thứ tự: stop cũ → nginx cutover → enable Zalo bên mới) — tránh hoàn toàn cửa sổ 2
+  session cùng sống, tránh gửi trùng tin nhắn thật.
+- **2 bug thật gặp phải, đều do chính quá trình migrate gây ra (không tồn tại trước đó):**
+  1. `onModuleInit()` của `LotteryService`/`ZaloBotService` chạy trước khi `DatabaseService` mở xong kết
+     nối SQLite (Nest không đảm bảo thứ tự init giữa module anh em) → crash lúc khởi động. Fix: gọi các
+     startup task này tường minh trong `main.ts` SAU `app.listen()`, đúng như bản gốc chạy trong callback
+     `app.listen()`.
+  2. `/etc/nginx/sites-enabled/api.tuandv.id.vn` hoá ra là **file thường, không phải symlink** tới
+     `sites-available/` (khác các domain khác) — sửa `sites-available` hoàn toàn vô tác dụng, nginx âm
+     thầm vẫn route về bản cũ. Verify ban đầu "pass" là false positive vì bản cũ/mới trả dữ liệu giống hệt
+     (cùng DB) — chỉ lộ ra khi tắt hẳn bản cũ gây 502 toàn domain. Bài học: luôn `ls -la` kiểm tra
+     `sites-enabled/<domain>` có đúng là symlink trước khi tin sửa `sites-available` có tác dụng.
+- **Trade-off cấu trúc:** Phase 1/2 viết đè trực tiếp lên repo cũ (in-place, xoá hẳn code Express cũ sau
+  khi port xong). Phase 3 KHÔNG làm vậy — tạo repo con `xsmbapi-nest` hoàn toàn tách biệt, giữ nguyên
+  `xsmbapi` cũ y hệt (chỉ thêm 1 file `legacy-storage-notify.js` cho `/storage`+`/notify`). Lý do: bot
+  Zalo cần khả năng rollback tức thời (chỉ cần `pm2 restart xsmbapi` cũ + đổi nginx, không cần build lại
+  gì) nếu session mới có vấn đề — rủi ro cao hơn hẳn 2 phase trước nên chấp nhận cấu trúc 3 repo không
+  đồng nhất để đổi lấy an toàn.
+- **Việc còn lại:** theo dõi cron chu kỳ đầu trên bản mới (đánh cược 17h/19h, tổng kết quỹ 8h, health-daily
+  23h30), sau ~1 tuần ổn định thì `pm2 delete` các tiến trình Express cũ (`xsmbapi`, `doctorapi`,
+  `kinhdichapi`) + dọn file nginx backup thừa.
+
+### 2026-07-03 (cùng ngày) — Hợp nhất hoàn toàn cấu trúc 3 backend, xoá hết code Express NGAY (không đợi 1 tuần)
+
+**Quyết định:** user chủ động nói đây là dự án học tập cá nhân, không phải thương mại → không cần cửa
+sổ rollback 1 tuần như đã lên kế hoạch ban đầu. Yêu cầu xoá hết code Express cũ ở cả 3 backend NGAY và
+thống nhất cấu trúc. Đã thực hiện xong trong cùng phiên:
+1. Port nốt `/storage`+`/notify` của `xsmbapi` thành NestJS module thật (trước đó tạm dùng 1 tiến trình
+   Express tối giản `xsmbapi-legacy` để rollback tức thời) — xoá hẳn tiến trình Express cuối cùng còn
+   sót lại trong toàn bộ hệ thống 3 backend.
+2. Merge repo con `xsmbapi-nest` NGƯỢC LẠI vào repo `xsmbapi` gốc (xoá code Express cũ, copy code Nest
+   vào, cùng cách `doctorapi`/`kinhdichapi` đã làm ở Phase 1/2) — giờ CẢ 3 REPO ĐỀU ĐỒNG NHẤT: 1 thư mục
+   git duy nhất/backend, toàn bộ NestJS, không còn thư mục con "-nest" tách biệt nào.
+3. Trên server: đổi tên cả 3 thư mục + pm2 process, drop hậu tố `-nest`
+   (`doctorapi-nest`→`doctorapi`, `kinhdichapi-nest`→`kinhdichapi`, `xsmbapi-nest`→`xsmbapi`), di
+   chuyển dữ liệu sống (uploads/knowledge, data.sqlite, cred.json, friends.json, groups.json) vào thư
+   mục mới trước khi xoá thư mục cũ, `pm2 delete` toàn bộ Express cũ + `xsmbapi-legacy`.
+4. nginx `api.tuandv.id.vn` rút gọn về 1 `location /` (bỏ path-split `/storage`+`/notify` sang port
+   khác — không cần nữa, đã hợp nhất vào cùng tiến trình).
+
+**Kết quả:** `pm2 list` server giờ chỉ còn đúng `doctorapi`/`kinhdichapi`/`xsmbapi` — không hậu tố,
+không bản Express nào chạy ở đâu nữa trong toàn hệ thống. Đã verify lại end-to-end qua domain thật cho
+cả 3 sau khi hợp nhất (không có regression).
+
+**Trade-offs:** mất khả năng rollback tức thời về Express (chấp nhận được — đã verify kỹ qua
+diff-parity trước khi xoá, dự án học tập không có SLA). Phát hiện thêm ngoài phạm vi (không phải mục
+tiêu chính nhưng tiện tay dọn theo chuẩn `doctorapi`/`kinhdichapi`): `.env` của `xsmbapi` từng bị track
+trong git chứa secret thật — đã `git rm --cached` + thêm `.env`/`dist/` vào `.gitignore`, nhưng secret
+cũ vẫn còn trong lịch sử git, nên cân nhắc rotate (`TELEGRAM_TOKEN`, `DB_PASSWORD`, `RESEND_API_KEY`,
+`NOTIFY_SECRET`, `GOOGLE_CLIENT_ID`, `FIREBASE_API_KEY`) nếu quan tâm tới việc repo từng có secret lộ
+trong history. Chi tiết đầy đủ ở `xsmbapi`'s `Memo/DECISIONS.md`.
 
 ---
 
