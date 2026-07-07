@@ -1,12 +1,12 @@
-// AI helper — calls Gemini for symptom triage and follow-up questions.
-// Replace with your provider of choice (OpenAI, Claude, etc.). Keep the
-// `askFollowUp` / `triage` signatures so UI screens don't need to change.
+// AI helper — calls Groq (OpenAI-compatible) for symptom triage and follow-up
+// questions, same provider/pattern as doctorapi's classify-meds. Keep the
+// `startTriage` signature so UI screens don't need to change.
 
 import type { AiQuestion } from "./types";
 
-const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GROQ_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY;
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 interface TriageResult {
   questions: AiQuestion[];
@@ -18,10 +18,11 @@ const SYSTEM_PROMPT = `Bạn là trợ lý y tế. Khi bệnh nhân mô tả tri
 1) Hỏi 3-4 câu follow-up dưới dạng multiple choice (mỗi câu 3-5 đáp án).
 2) Sau khi có đủ thông tin, gợi ý chuyên khoa phù hợp (1-3 khoa) và các bệnh có thể liên quan.
 3) Không chẩn đoán dứt khoát. Luôn khuyên gặp bác sỹ.
-Trả lời JSON theo schema: { questions: [{prompt, options[]}], specialties: [], conditions: [] }`;
+Trả lời CHỈ bằng JSON, không thêm chữ nào khác, theo đúng format:
+{ "questions": [{"prompt": "...", "options": ["...", "..."]}], "specialties": [], "conditions": [] }`;
 
 export async function startTriage(complaint: string): Promise<TriageResult> {
-  if (!GEMINI_KEY) return mockTriage(complaint);
+  if (!GROQ_KEY) return mockTriage(complaint);
 
   // Retry once on 429 after a short delay
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -29,13 +30,17 @@ export async function startTriage(complaint: string): Promise<TriageResult> {
 
     let res: Response;
     try {
-      res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+      res = await fetch(GROQ_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${GROQ_KEY}` },
         body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: complaint }] }],
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          generationConfig: { responseMimeType: "application/json" },
+          model: GROQ_MODEL,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: complaint },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.3,
         }),
       });
     } catch {
@@ -46,7 +51,7 @@ export async function startTriage(complaint: string): Promise<TriageResult> {
     if (!res.ok) return mockTriage(complaint);
 
     const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    const text = data.choices?.[0]?.message?.content ?? "{}";
     try {
       const parsed = JSON.parse(text) as Partial<TriageResult>;
       if (!Array.isArray(parsed.questions) || parsed.questions.length === 0) {

@@ -1,7 +1,7 @@
 # ConnectDoctor — Project Context for Claude
 
 Telemedicine app (React Native + Expo) with two roles: **patient** and **doctor**.
-Backend: Firebase Auth + Firestore + Storage. AI: Google Gemini.
+Backend: Firebase Auth + Firestore + Storage. AI: Groq (triage) + Google Gemini (OCR).
 
 ---
 
@@ -14,7 +14,7 @@ Backend: Firebase Auth + Firestore + Storage. AI: Google Gemini.
 | Styling | NativeWind v4 (Tailwind for RN) |
 | State | Zustand (`hooks/useAuth.ts`) |
 | Backend | Firebase Auth + Firestore + Storage |
-| AI | Google Gemini (`lib/ai.ts`, `lib/ocr.ts`) |
+| AI | Groq (`lib/ai.ts`) + Google Gemini (`lib/ocr.ts`) |
 | Types | TypeScript strict |
 
 ---
@@ -311,11 +311,11 @@ markThreadRead(threadId, role)                 → Promise<void>
 ## AI & OCR (`lib/ai.ts`, `lib/ocr.ts`)
 
 ```ts
-startTriage(complaint: string) → { questions, specialties, conditions }
-extractMedsFromImage(imageUri) → { name, dose, category }[]
-extractMetricsFromImage(imageUri) → { label, value, unit }[]
+startTriage(complaint: string) → { questions, specialties, conditions }   // Groq (llama-3.3-70b-versatile)
+extractMedsFromImage(imageUri) → { name, dose, category }[]               // Gemini
+extractMetricsFromImage(imageUri) → { label, value, unit }[]              // Gemini
 ```
-Falls back to mock data when `EXPO_PUBLIC_GEMINI_API_KEY` is empty.
+`startTriage` falls back to mock data when `EXPO_PUBLIC_GROQ_API_KEY` is empty; OCR functions fall back to mock data when `EXPO_PUBLIC_GEMINI_API_KEY` is empty.
 
 ---
 
