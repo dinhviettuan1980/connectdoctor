@@ -17,6 +17,39 @@ export async function notify(subject: string, body = ""): Promise<boolean> {
   }
 }
 
+export interface ReminderSyncItem {
+  id: string;
+  label: string;
+  hour: number;
+  minute: number;
+  enabled: boolean;
+  meds?: string[];
+}
+
+/**
+ * Đồng bộ toàn bộ lịch nhắc thuốc của user lên doctorapi — server tự nhắc qua Telegram
+ * (và Expo push nếu có expoPushToken) đúng giờ, không phụ thuộc app có mở/có quyền
+ * notification trên máy hay không. Gọi lại (full-replace theo uid) mỗi khi lịch thay đổi.
+ */
+export async function syncMedicationReminders(
+  uid: string,
+  schedules: ReminderSyncItem[],
+  expoPushToken?: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/medication-reminders/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-notify-secret": SECRET },
+      body: JSON.stringify({ uid, schedules, expoPushToken }),
+    });
+    const json = await res.json();
+    return !!json.ok;
+  } catch (err) {
+    console.error("[syncMedicationReminders]", err);
+    return false;
+  }
+}
+
 export type MealTime = "Sáng" | "Chiều" | "Tối";
 
 /**

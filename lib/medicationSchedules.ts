@@ -1,12 +1,13 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp, getDocs,
+  onSnapshot, query, orderBy, serverTimestamp, getDocs, getDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import {
   scheduleMedicationReminder,
   cancelMedicationReminder,
 } from "./notifications";
+import { syncMedicationReminders } from "./notify";
 
 export interface MedicationSchedule {
   id: string;
@@ -40,6 +41,25 @@ export async function getSchedulesOnce(uid: string): Promise<MedicationSchedule[
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MedicationSchedule));
 }
 
+/** Đẩy toàn bộ lịch nhắc hiện tại của user lên doctorapi để server tự nhắc qua Telegram/push
+ * — không chặn UI, lỗi chỉ log, không ảnh hưởng thao tác chính (thêm/sửa/xoá lịch). */
+async function syncRemindersToServer(uid: string): Promise<void> {
+  try {
+    const [schedules, userSnap] = await Promise.all([
+      getSchedulesOnce(uid),
+      getDoc(doc(db, "users", uid)),
+    ]);
+    const expoPushToken = (userSnap.data()?.expoPushToken as string | undefined) ?? undefined;
+    await syncMedicationReminders(
+      uid,
+      schedules.map((s) => ({ id: s.id, label: s.label, hour: s.hour, minute: s.minute, enabled: s.enabled, meds: s.meds })),
+      expoPushToken,
+    );
+  } catch (err) {
+    console.error("[syncRemindersToServer]", err);
+  }
+}
+
 export async function addSchedule(
   uid: string,
   label: string,
@@ -55,6 +75,7 @@ export async function addSchedule(
     createdAt: Date.now(),
   });
   await scheduleMedicationReminder(ref.id, label, hour, minute, prescriptionId, meds);
+  syncRemindersToServer(uid);
   return ref.id;
 }
 
@@ -73,9 +94,11 @@ export async function updateSchedule(
       await scheduleMedicationReminder(id, fields.label, fields.hour, fields.minute, fields.prescriptionId, fields.meds);
     }
   }
+  syncRemindersToServer(uid);
 }
 
 export async function deleteSchedule(uid: string, id: string): Promise<void> {
   await cancelMedicationReminder(id);
   await deleteDoc(doc(col(uid), id));
+  syncRemindersToServer(uid);
 }
