@@ -1,6 +1,10 @@
 import { readFileSync } from "fs";
 
-const GEMINI_KEY = "AIzaSyBfKq3EMqv9tGURhmcUeYu1rfIhVd4Qn10";
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_KEY) {
+  console.error("Thiếu GEMINI_API_KEY (export GEMINI_API_KEY=... trước khi chạy).");
+  process.exit(1);
+}
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
 const base64 = readFileSync("testdata/xn1.jpg").toString("base64");
