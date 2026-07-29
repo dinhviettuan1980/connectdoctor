@@ -1,6 +1,7 @@
 // Mocked doctor lookup — replace with `getDoc(doc(db, "doctors", id))`.
 
 import type { DoctorProfile } from "@/lib/types";
+import { MOCK_DOCTORS_DATA } from "@/lib/mockDoctorsData";
 
 const DOCTORS: Record<string, DoctorProfile> = {
   "demo-doctor-1": {
@@ -59,7 +60,8 @@ const DOCTORS: Record<string, DoctorProfile> = {
 
 export function getMockDoctor(id: string): DoctorProfile {
   return (
-    DOCTORS[id] ?? {
+    DOCTORS[id] ??
+    MOCK_DOCTORS_DATA.find((d) => d.uid === id) ?? {
       uid: id,
       fullName: "Bác sỹ",
       specialty: "Đa khoa",

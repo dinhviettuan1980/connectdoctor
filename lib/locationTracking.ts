@@ -17,3 +17,4 @@ export function setTrackingUid(_uid: string | null) {}
 export async function requestLocationPermissions(): Promise<boolean> { return false; }
 export async function startLocationTracking(_uid: string): Promise<void> {}
 export async function stopLocationTracking(): Promise<void> {}
+export async function getCurrentLocation(): Promise<{ lat: number; lng: number } | null> { return null; }

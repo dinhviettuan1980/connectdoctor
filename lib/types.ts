@@ -103,6 +103,9 @@ export interface DoctorProfile {
   rating?: number;
   email?: string;
   phone?: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface Credential {

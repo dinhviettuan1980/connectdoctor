@@ -101,3 +101,20 @@ export async function stopLocationTracking(): Promise<void> {
     await Location.stopLocationUpdatesAsync(LOCATION_TASK);
   }
 }
+
+// One-shot current position — used to sort "gần nhất" lists (e.g. suggested
+// doctors). Falls back to null on web, denied permission, or any error.
+export async function getCurrentLocation(): Promise<{ lat: number; lng: number } | null> {
+  if (Platform.OS === "web") return null;
+  try {
+    let { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== "granted") {
+      ({ status } = await Location.requestForegroundPermissionsAsync());
+    }
+    if (status !== "granted") return null;
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+}
