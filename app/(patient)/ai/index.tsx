@@ -135,12 +135,16 @@ export default function AiQuestionFlow() {
         <Note>AI hỏi tối đa 4–5 câu rồi gợi ý chuyên khoa phù hợp.</Note>
 
         <View className="flex-row gap-2 mt-4">
-          <Button block onPress={() => setStep(Math.max(0, step - 1))} disabled={step === 0}>
-            ← Trước
-          </Button>
-          <Button variant="primary" block onPress={next} disabled={!answers[step]}>
-            {step < total - 1 ? "Tiếp →" : "Xem kết quả →"}
-          </Button>
+          <View className="flex-1">
+            <Button block onPress={() => setStep(Math.max(0, step - 1))} disabled={step === 0}>
+              ← Trước
+            </Button>
+          </View>
+          <View className="flex-1">
+            <Button variant="primary" block onPress={next} disabled={!answers[step]}>
+              {step < total - 1 ? "Tiếp →" : "Xem kết quả →"}
+            </Button>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

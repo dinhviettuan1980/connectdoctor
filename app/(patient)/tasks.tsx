@@ -481,18 +481,22 @@ export default function TasksScreen() {
               )}
 
               <View className="flex-row gap-3">
-                <Button variant="secondary" block onPress={() => setShowTaskModal(false)}>
-                  Huỷ
-                </Button>
-                <Button
-                  variant="primary"
-                  block
-                  loading={savingTask}
-                  disabled={!taskTitle.trim()}
-                  onPress={handleSaveTask}
-                >
-                  {editingTask ? "Lưu" : "Thêm"}
-                </Button>
+                <View className="flex-1">
+                  <Button variant="secondary" block onPress={() => setShowTaskModal(false)}>
+                    Huỷ
+                  </Button>
+                </View>
+                <View className="flex-1">
+                  <Button
+                    variant="primary"
+                    block
+                    loading={savingTask}
+                    disabled={!taskTitle.trim()}
+                    onPress={handleSaveTask}
+                  >
+                    {editingTask ? "Lưu" : "Thêm"}
+                  </Button>
+                </View>
               </View>
             </View>
           </Pressable>
@@ -578,18 +582,22 @@ export default function TasksScreen() {
               </Button>
 
               <View className="flex-row gap-3">
-                <Button variant="secondary" block onPress={() => setShowRepoModal(false)}>
-                  Huỷ
-                </Button>
-                <Button
-                  variant="primary"
-                  block
-                  loading={savingRepo}
-                  disabled={!repoName.trim() || !repoUrl.trim()}
-                  onPress={handleSaveRepo}
-                >
-                  {editingRepo ? "Lưu" : "Thêm"}
-                </Button>
+                <View className="flex-1">
+                  <Button variant="secondary" block onPress={() => setShowRepoModal(false)}>
+                    Huỷ
+                  </Button>
+                </View>
+                <View className="flex-1">
+                  <Button
+                    variant="primary"
+                    block
+                    loading={savingRepo}
+                    disabled={!repoName.trim() || !repoUrl.trim()}
+                    onPress={handleSaveRepo}
+                  >
+                    {editingRepo ? "Lưu" : "Thêm"}
+                  </Button>
+                </View>
               </View>
             </View>
           </Pressable>
