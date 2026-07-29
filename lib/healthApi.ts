@@ -1,3 +1,5 @@
+import type { LocationPoint } from "./locationApi";
+
 const API_BASE = "https://api.tuandv.id.vn";
 
 async function apiFetch<T>(path: string): Promise<T> {
@@ -72,4 +74,20 @@ export function fetchHealthAlerts(device: string, date?: string): Promise<Health
 
 export function fetchHealthDaily(device: string, days = 7): Promise<HealthDailySummary[]> {
   return apiFetch<HealthDailySummary[]>(`/api/health-daily?device=${encodeURIComponent(device)}&days=${days}`);
+}
+
+// Đồng hồ Garmin (qua HanoiWatch) chỉ gửi vị trí CACHED gần nhất mỗi lần đồng bộ (5 phút/lần) —
+// không chủ động bật GPS. Không phải record nào cũng có lat/lng (tuỳ máy có định vị gần đây hay
+// không) — trả null để lọc bỏ ở nơi gọi.
+export function healthRecordToLocationPoint(r: HealthSyncRecord): LocationPoint | null {
+  if (r.lat == null || r.lng == null) return null;
+  return {
+    lat: r.lat / 1_000_000,
+    lng: r.lng / 1_000_000,
+    altitude: r.altitude ?? null,
+    speed: r.speed_kmh != null ? r.speed_kmh / 3.6 : null,
+    accuracy: null,
+    ts: r.ts,
+    date: r.date,
+  };
 }

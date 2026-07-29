@@ -35,11 +35,12 @@ import {
   fetchHealthDevices,
   fetchHealthHistory,
   fetchHealthDaily,
+  healthRecordToLocationPoint,
   type HealthSyncRecord,
   type HealthDailySummary,
 } from "@/lib/healthApi";
 import HealthMap from "@/components/HealthMap";
-import { fetchLocationHistory } from "@/lib/locationApi";
+import { fetchLocationHistory, type LocationPoint } from "@/lib/locationApi";
 import { getPatientProfile } from "@/lib/patientProfile";
 import type { PatientProfile } from "@/lib/types";
 
@@ -1557,6 +1558,22 @@ export default function Health() {
     refetchInterval: 5 * 60 * 1000,
   });
 
+  // Đồng hồ Garmin (qua HanoiWatch) gửi vị trí cached kèm health-sync 5 phút/lần — không phụ
+  // thuộc quyền vị trí nền của app điện thoại. Gộp với điểm từ phone (nếu có) để hiện đủ.
+  const garminLocationPoints = useMemo(
+    () =>
+      historyDesc
+        .filter((r) => r.date === todayDate)
+        .map(healthRecordToLocationPoint)
+        .filter((p): p is LocationPoint => p !== null),
+    [historyDesc, todayDate],
+  );
+
+  const mergedLocationPoints = useMemo(
+    () => [...locationPoints, ...garminLocationPoints].sort((a, b) => a.ts - b.ts),
+    [locationPoints, garminLocationPoints],
+  );
+
   const historyAsc = useMemo(() => [...historyDesc].reverse(), [historyDesc]);
 
   const filtered = useMemo(() => {
@@ -1672,7 +1689,7 @@ export default function Health() {
           </>
         ) : activeTab === "map" ? (
           <HealthMap
-            points={locationPoints}
+            points={mergedLocationPoints}
             height={420}
             homeAddress={homeAddress}
             autoGoHome={triggerGoHomeRef.current}
