@@ -260,6 +260,19 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // ─── /my_data/{deviceId}/records/{recordId}, /my_data/{deviceId}/alerts/{alertId} ────
+    // Garmin watch health-sync mirror (doctorapi writes via raw API key, no Firebase Auth
+    // context -- that write is NOT covered by these rules and stays permission-denied until
+    // it's switched to the Admin SDK; see doctorapi/src/health-sync/health-sync.service.ts).
+    // This rule only unblocks READS for the "Devices" linking tab (lib/garmin.ts, profile.tsx).
+
+    match /my_data/{deviceId} {
+      allow read: if isAuthed();
+      match /{subcollection}/{recordId} {
+        allow read: if isAuthed();
+      }
+    }
+
     // ─── /repos/{id} ─────────────────────────────────────────────────────────
     // GitHub repo registry used by agent and commit-review function.
     // Any authenticated user can read; only admin can write.
