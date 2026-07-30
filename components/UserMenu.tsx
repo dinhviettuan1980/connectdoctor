@@ -212,10 +212,17 @@ export function UserMenu() {
         </Pressable>
         <Pressable
           onPress={() => { close(); router.push("/(patient)/knowledge" as any); }}
-          className="flex-row items-center gap-3 px-4 py-3 active:bg-paper-2 border-b border-line-soft"
+          className="flex-row items-center gap-3 px-4 py-3 active:bg-paper-2"
         >
           <Text className="text-base">🧘</Text>
           <Text className="text-sm font-bold text-ink">Thư giãn</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { close(); router.push("/(patient)/services" as any); }}
+          className="flex-row items-center gap-3 px-4 py-3 active:bg-paper-2 border-b border-line-soft"
+        >
+          <Text className="text-base">🧩</Text>
+          <Text className="text-sm font-bold text-ink">Dịch vụ khác</Text>
         </Pressable>
       </View>
 
