@@ -25,7 +25,8 @@
         "NSLocationAlwaysUsageDescription": "ConnectDoctor cần vị trí nền để ghi lịch sử di chuyển khi app đóng.",
         "NSContactsUsageDescription": "ConnectDoctor cần truy cập danh bạ để thêm liên hệ người thân.",
         "LSApplicationQueriesSchemes": ["zalo", "tel"],
-        "UIBackgroundModes": ["location", "fetch"]
+        "UIBackgroundModes": ["location", "fetch"],
+        "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "GXSFH7K2X5"
     },
