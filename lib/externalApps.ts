@@ -1,5 +1,5 @@
-// Other apps in the tuandv.id.vn ecosystem, embedded via WebView so they're
-// reachable from inside ConnectDoctor ("Dịch vụ khác" in the user menu).
+// Other apps in the tuandv.id.vn ecosystem, embedded via WebView as tiles in
+// the top-level app hub (app/(hub)) alongside ConnectDoctor itself.
 
 export interface ExternalApp {
   slug: string;
@@ -34,6 +34,12 @@ export const EXTERNAL_APPS: ExternalApp[] = [
     icon: "💼",
     url: "https://tuandv.id.vn/jobs/",
     basicAuth: { username: "tuandv", password: "123456" },
+  },
+  {
+    slug: "ai-director",
+    title: "AI Director",
+    icon: "🎬",
+    url: "https://ksbvapi.tuandv.id.vn/ai-director/",
   },
 ];
 

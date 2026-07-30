@@ -1,7 +1,7 @@
 import { Redirect } from "expo-router";
 
-// Root redirect; AuthGate in _layout will send the user to the right place
-// once Firebase auth state resolves.
+// Root redirect — lands on the app hub (6 tiles incl. ConnectDoctor) which
+// doesn't require auth; AuthGate in _layout only gates the ConnectDoctor tile.
 export default function Index() {
-  return <Redirect href="/(auth)/role-select" />;
+  return <Redirect href="/(hub)" />;
 }

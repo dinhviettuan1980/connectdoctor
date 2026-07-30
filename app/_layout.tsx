@@ -99,10 +99,14 @@ function AuthGate() {
   useEffect(() => {
     if (initializing) return;
     const inAuthGroup = segments[0] === "(auth)";
+    const inHub = segments[0] === "(hub)";
     const inPatient = segments[0] === "(patient)";
     const inDoctor = segments[0] === "(doctor)";
 
-    if (!user && !inAuthGroup) {
+    // (hub) is the app's landing screen (6 tiles incl. ConnectDoctor) and
+    // doesn't require auth — only entering the ConnectDoctor tile ((auth)/
+    // (patient)/(doctor)) does.
+    if (!user && !inAuthGroup && !inHub) {
       router.replace("/(auth)/sign-in");
     } else if (user) {
       const isAdmin = user.role === "admin";

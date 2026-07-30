@@ -218,7 +218,7 @@ export function UserMenu() {
           <Text className="text-sm font-bold text-ink">Thư giãn</Text>
         </Pressable>
         <Pressable
-          onPress={() => { close(); router.push("/(patient)/services" as any); }}
+          onPress={() => { close(); router.push("/(hub)" as any); }}
           className="flex-row items-center gap-3 px-4 py-3 active:bg-paper-2 border-b border-line-soft"
         >
           <Text className="text-base">🧩</Text>
