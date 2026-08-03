@@ -33,7 +33,6 @@ export const EXTERNAL_APPS: ExternalApp[] = [
     title: "Job Search",
     icon: "💼",
     url: "https://tuandv.id.vn/jobs/",
-    basicAuth: { username: "tuandv", password: "123456" },
   },
   {
     slug: "ai-director",
